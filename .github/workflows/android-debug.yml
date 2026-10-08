@@ -38,6 +38,9 @@ jobs:
           test "$(git -C .artifacts/p4a rev-parse HEAD)" = \
             58d21141f17c889bf8585f5665921d72028f8831
           git -C .artifacts/p4a apply "$GITHUB_WORKSPACE/android/patches/webview.patch"
+          mkdir -p .artifacts/p4a/pythonforandroid/bootstraps/webview/build/src/main/res/xml
+          cp android/res/xml/inspectra_file_paths.xml \
+            .artifacts/p4a/pythonforandroid/bootstraps/webview/build/src/main/res/xml/
           python -m pip install --editable .artifacts/p4a
           python -m pip install 'Cython==3.3.0'
       - name: Prepare Inspectra payload
@@ -56,11 +59,20 @@ jobs:
             --name=Inspectra --version=0.1.0 --dist-name=inspectra \
             --bootstrap=webview --requirements="$requirements" --port=5000 \
             --local-recipes=android/p4a-recipes \
+            --enable-androidx --depend=androidx.core:core:1.15.0 \
             --arch='${{ inputs.arch }}' --sdk-dir="$ANDROID_HOME" \
             --ndk-dir="$ANDROID_HOME/ndk/28.2.13676358" \
             --android-api=35 --ndk-api=24 \
             --icon=assets/qc-android.png --debug \
             2>&1 | tee .artifacts/android-build.log
+      - name: Preserve native distribution for local Java QA
+        if: ${{ always() }}
+        run: |
+          distribution="$HOME/.local/share/python-for-android/dists/inspectra"
+          if [ -d "$distribution" ]; then
+            tar --exclude=./build --exclude=./.gradle -czf .artifacts/android-native-dist.tar.gz \
+              -C "$distribution" .
+          fi
       - name: Preserve APK and build evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -70,6 +82,7 @@ jobs:
             *.apk
             dist/*.apk
             .artifacts/android-build.log
+            .artifacts/android-native-dist.tar.gz
           if-no-files-found: warn
           include-hidden-files: true
           retention-days: 14

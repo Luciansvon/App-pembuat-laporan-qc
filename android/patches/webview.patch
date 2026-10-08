@@ -1,16 +1,24 @@
 diff --git a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
-index 9ad9503..ccc6d00 100644
+index 9ad9503..a1c697e 100644
 --- a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
 +++ b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
  package org.kivy.android;
  
  import android.app.Activity;
 +import android.content.ActivityNotFoundException;
++import android.content.ClipData;
  import android.app.AlertDialog;
  import android.content.Context;
  import android.content.DialogInterface;
-@@ -20,15 +21,23 @@ import android.view.ViewGroup;
+@@ -14,26 +16,36 @@ import android.os.AsyncTask;
+ import android.os.Bundle;
+ import android.os.PowerManager;
+ import android.os.SystemClock;
++import android.provider.MediaStore;
+ import android.util.Log;
+ import android.view.KeyEvent;
+ import android.view.ViewGroup;
  import android.view.ViewGroup.LayoutParams;
  import android.webkit.CookieManager;
  import android.webkit.WebBackForwardList;
@@ -34,19 +42,42 @@ index 9ad9503..ccc6d00 100644
  import java.util.ArrayList;
  import java.util.Collections;
  import java.util.Iterator;
-@@ -52,6 +61,11 @@ public class PythonActivity extends Activity {
+ import java.util.List;
+ import org.renpy.android.ResourceManager;
++import androidx.core.content.FileProvider;
+ 
+ public class PythonActivity extends Activity {
+     // This activity is modified from a mixture of the SDLActivity and
+@@ -52,6 +64,14 @@ public class PythonActivity extends Activity {
      protected static WebView mWebView;
  
      protected static Thread mPythonThread;
 +    private static final int REQUEST_FILE_CHOOSER = 8101;
 +    private static final int REQUEST_SAVE_REPORT = 8102;
++    private static final int REQUEST_CAMERA = 8103;
 +    private ValueCallback<Uri[]> mFilePathCallback;
 +    private File pendingReportFile;
 +    private boolean reportSaving;
++    private File pendingCameraFile;
++    private Uri pendingCameraUri;
  
      private ResourceManager resourceManager = null;
      private Bundle mMetaData = null;
-@@ -163,24 +177,58 @@ public class PythonActivity extends Activity {
+@@ -92,6 +112,13 @@ public class PythonActivity extends Activity {
+         Log.v(TAG, "My oncreate running");
+         resourceManager = new ResourceManager(this);
+         super.onCreate(savedInstanceState);
++        File captureDirectory = new File(getCacheDir(), "capture");
++        File[] captures = captureDirectory.listFiles();
++        if (captures != null) {
++            for (File capture : captures) {
++                if (capture.isFile()) capture.delete();
++            }
++        }
+ 
+         this.mActivity = this;
+         this.showLoadingScreen();
+@@ -163,24 +190,59 @@ public class PythonActivity extends Activity {
              mWebView = new WebView(PythonActivity.mActivity);
              mWebView.getSettings().setJavaScriptEnabled(true);
              mWebView.getSettings().setDomStorageEnabled(true);
@@ -60,13 +91,14 @@ index 9ad9503..ccc6d00 100644
 +                        mFilePathCallback.onReceiveValue(null);
 +                    }
 +                    mFilePathCallback = callback;
-+                    try {
-+                        startActivityForResult(params.createIntent(), REQUEST_FILE_CHOOSER);
-+                    } catch (ActivityNotFoundException error) {
-+                        mFilePathCallback = null;
-+                        callback.onReceiveValue(null);
-+                        Toast.makeText(PythonActivity.this, "Pemilih foto tidak tersedia", Toast.LENGTH_LONG).show();
-+                    }
++                    new AlertDialog.Builder(PythonActivity.this)
++                            .setTitle("Foto inspeksi")
++                            .setItems(new String[] {"Ambil foto", "Pilih foto"}, (dialog, option) -> {
++                                if (option == 0) launchCamera();
++                                else launchPhotoPicker(params);
++                            })
++                            .setOnCancelListener(dialog -> finishFileChoice(null))
++                            .show();
 +                    return true;
 +                }
 +            });
@@ -115,10 +147,85 @@ index 9ad9503..ccc6d00 100644
                          }
  
                          @Override
-@@ -233,6 +281,66 @@ public class PythonActivity extends Activity {
+@@ -233,6 +295,144 @@ public class PythonActivity extends Activity {
          }
      }
  
++    private void finishFileChoice(Uri[] result) {
++        if (mFilePathCallback != null) {
++            mFilePathCallback.onReceiveValue(result);
++            mFilePathCallback = null;
++        }
++    }
++
++    private void launchPhotoPicker(WebChromeClient.FileChooserParams params) {
++        try {
++            startActivityForResult(params.createIntent(), REQUEST_FILE_CHOOSER);
++        } catch (ActivityNotFoundException error) {
++            finishFileChoice(null);
++            Toast.makeText(this, "Pemilih foto tidak tersedia", Toast.LENGTH_LONG).show();
++        }
++    }
++
++    private void launchCamera() {
++        try {
++            File directory = new File(getCacheDir(), "capture");
++            if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Capture directory unavailable");
++            pendingCameraFile = File.createTempFile("qc-", ".jpg", directory);
++            pendingCameraUri = FileProvider.getUriForFile(this, getPackageName() + ".files", pendingCameraFile);
++            Intent camera = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
++            camera.putExtra(MediaStore.EXTRA_OUTPUT, pendingCameraUri);
++            camera.setClipData(ClipData.newRawUri("Foto inspeksi", pendingCameraUri));
++            camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
++            startActivityForResult(camera, REQUEST_CAMERA);
++        } catch (IOException | RuntimeException error) {
++            Log.e(TAG, "Cannot open camera", error);
++            if (pendingCameraFile != null) pendingCameraFile.delete();
++            pendingCameraFile = null;
++            pendingCameraUri = null;
++            finishFileChoice(null);
++            Toast.makeText(this, "Kamera tidak tersedia. Gunakan Pilih foto.", Toast.LENGTH_LONG).show();
++        }
++    }
++
++    private void writeReport(File report, Uri destination, int grantFlags, boolean persistable) {
++        new Thread(() -> {
++            boolean retained = false;
++            try {
++                if (persistable) {
++                    try {
++                        getContentResolver().takePersistableUriPermission(destination, grantFlags);
++                        retained = true;
++                    } catch (SecurityException error) {
++                        Log.w(TAG, "Provider did not retain the document grant", error);
++                    }
++                }
++                try (InputStream source = new FileInputStream(report);
++                        OutputStream target = getContentResolver().openOutputStream(destination, "w")) {
++                    if (target == null) throw new IOException("No output stream");
++                    byte[] buffer = new byte[65536];
++                    int count;
++                    while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count);
++                }
++                runOnUiThread(() -> Toast.makeText(this, "DOCX tersimpan", Toast.LENGTH_LONG).show());
++            } catch (IOException | SecurityException error) {
++                Log.e(TAG, "Cannot save DOCX", error);
++                runOnUiThread(() -> Toast.makeText(this,
++                        "Gagal menyimpan DOCX. Coba lokasi lain.", Toast.LENGTH_LONG).show());
++            } finally {
++                report.delete();
++                if (retained) {
++                    try {
++                        getContentResolver().releasePersistableUriPermission(destination, grantFlags);
++                    } catch (SecurityException error) {
++                        Log.w(TAG, "Document grant was already released", error);
++                    }
++                }
++                runOnUiThread(() -> reportSaving = false);
++            }
++        }, "InspectraReportSave").start();
++    }
++
 +    private void saveReport(String id) {
 +        try {
 +            java.util.UUID.fromString(id);
@@ -155,6 +262,9 @@ index 9ad9503..ccc6d00 100644
 +                    pendingReportFile = report;
 +                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
 +                    intent.addCategory(Intent.CATEGORY_OPENABLE);
++                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
++                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
++                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 +                    intent.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 +                    intent.putExtra(Intent.EXTRA_TITLE, report.getName());
 +                    try {
@@ -182,36 +292,62 @@ index 9ad9503..ccc6d00 100644
      @Override
      public void onDestroy() {
          Log.i("Destroy", "end of app");
-@@ -439,6 +547,32 @@ public class PythonActivity extends Activity {
+@@ -439,6 +639,39 @@ public class PythonActivity extends Activity {
  
      @Override
      protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
++        super.onActivityResult(requestCode, resultCode, intent);
 +        if (requestCode == REQUEST_FILE_CHOOSER && mFilePathCallback != null) {
 +            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, intent);
-+            mFilePathCallback.onReceiveValue(result);
-+            mFilePathCallback = null;
++            finishFileChoice(result);
++            return;
++        }
++        if (requestCode == REQUEST_CAMERA) {
++            if (resultCode == RESULT_OK && pendingCameraFile != null && pendingCameraFile.length() > 0) {
++                finishFileChoice(new Uri[] {pendingCameraUri});
++            } else {
++                if (pendingCameraFile != null) pendingCameraFile.delete();
++                finishFileChoice(null);
++            }
++            pendingCameraFile = null;
++            pendingCameraUri = null;
 +            return;
 +        }
 +        if (requestCode == REQUEST_SAVE_REPORT) {
-+            if (resultCode == RESULT_OK && intent != null && intent.getData() != null
-+                    && pendingReportFile != null) {
-+                try (InputStream source = new FileInputStream(pendingReportFile);
-+                        OutputStream target = getContentResolver().openOutputStream(intent.getData())) {
-+                    if (target == null) throw new IOException("No output stream");
-+                    byte[] buffer = new byte[65536];
-+                    int count;
-+                    while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count);
-+                    Toast.makeText(this, "DOCX tersimpan", Toast.LENGTH_LONG).show();
-+                } catch (IOException error) {
-+                    Log.e(TAG, "Cannot save DOCX", error);
-+                    Toast.makeText(this, "Gagal menyimpan DOCX", Toast.LENGTH_LONG).show();
-+                }
-+            }
-+            if (pendingReportFile != null) pendingReportFile.delete();
++            File report = pendingReportFile;
 +            pendingReportFile = null;
-+            reportSaving = false;
++            if (resultCode == RESULT_OK && intent != null && intent.getData() != null
++                    && report != null) {
++                Uri destination = intent.getData();
++                int grantFlags = intent.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
++                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
++                writeReport(report, destination, grantFlags,
++                        (intent.getFlags() & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0);
++            } else {
++                if (report != null) report.delete();
++                reportSaving = false;
++            }
 +            return;
 +        }
          if (this.activityResultListeners == null) return;
          this.onResume();
          synchronized (this.activityResultListeners) {
+diff --git a/pythonforandroid/bootstraps/webview/build/templates/AndroidManifest.tmpl.xml b/pythonforandroid/bootstraps/webview/build/templates/AndroidManifest.tmpl.xml
+index 3a99e87..d2c322b 100644
+--- a/pythonforandroid/bootstraps/webview/build/templates/AndroidManifest.tmpl.xml
++++ b/pythonforandroid/bootstraps/webview/build/templates/AndroidManifest.tmpl.xml
+@@ -57,6 +57,14 @@
+         <meta-data android:name="{{ m.split('=', 1)[0] }}" android:value="{{ m.split('=', 1)[-1] }}"/>{% endfor %}
+         <meta-data android:name="wakelock" android:value="{% if args.wakelock %}1{% else %}0{% endif %}"/>
+ 
++        <provider android:name="androidx.core.content.FileProvider"
++                  android:authorities="{{ args.package }}.files"
++                  android:exported="false"
++                  android:grantUriPermissions="true">
++            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
++                       android:resource="@xml/inspectra_file_paths" />
++        </provider>
++
+         <activity android:name="org.kivy.android.PythonActivity"
+                   android:label="@string/app_name"
+                   android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|fontScale|uiMode{% if args.min_sdk_version >= 8 %}|uiMode{% endif %}{% if args.min_sdk_version >= 13 %}|screenSize|smallestScreenSize{% endif %}{% if args.min_sdk_version >= 17 %}|layoutDirection{% endif %}{% if args.min_sdk_version >= 24 %}|density{% endif %}"
