@@ -177,12 +177,12 @@ README, project contract, repository-audit contract dan daftar workflow diperiks
 Tersedia repository hygiene, evidence/canonicalization dan artifact identity.
 Tidak tersedia executable generic React/FastAPI build/test provider pada snapshot ini.
 
-Project menyiapkan `.bima/audit.json` sebagai input hygiene. Belum menambahkan
-workflow baru: project ini belum mempunyai Git HEAD, sedangkan shared auditor
-mensyaratkan Git top-level dengan HEAD. Catat sebagai prasyarat lokal, bukan defect
-shared infra. Saat repo Git siap, gunakan reusable launcher/workflow yang ditinjau
-dan SHA pin yang cocok; jangan salin implementasinya. Verifikasi pin terhadap remote
-sebelum hosted adoption; hasil lokal bukan status GitHub.
+Project menyediakan `.bima/audit.json` sebagai input hygiene. Setelah commit
+awal tersedia, auditor lokal DEV-INFRA dijalankan dari checkout shared dan
+menghasilkan `pass`, 79 file, nol temuan, pada commit awal. Caller workflow
+`.github/workflows/repository-hygiene.yml` memakai reusable workflow DEV-INFRA;
+SHA workflow dan `infra-ref` sama-sama dipin ke commit yang telah diperiksa.
+Hasil lokal bukan status GitHub; run hosted harus diperiksa terpisah.
 
 Build/test domain tetap command project dengan logs/JUnit. Hasil hygiene tidak
 membuktikan DOCX/PWA/security acceptance. Error shared workflow/runner dilaporkan

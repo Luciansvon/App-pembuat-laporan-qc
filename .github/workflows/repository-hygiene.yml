@@ -1,0 +1,14 @@
+name: Repository hygiene
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    uses: Luciansvon/B.I.M.A-DEV-INFRA/.github/workflows/repository-audit.yml@4ebd5df21a9e71d4b19ecfd9e48cfaab79293b67
+    with:
+      infra-ref: 4ebd5df21a9e71d4b19ecfd9e48cfaab79293b67
+      policy-path: .bima/audit.json
+      artifact-name: inspectra-repository-hygiene

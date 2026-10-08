@@ -31,10 +31,12 @@ Python diperiksa pada 7 Oktober 2026; package-lock serta requirements.lock adala
 pin aktual. Warnings pytest: Starlette menandai integrasi TestClient/httpx deprecated;
 hasil 8 test tetap PASS dalam scope ini.
 
-Shared DEV-INFRA repository audit **belum dieksekusi** untuk project karena
-project folder belum mempunyai Git HEAD. `.bima/audit.json` sudah
-disiapkan sebagai input; tidak ada workflow yang disalin. Pemeriksaan lint/test
-aplikasi tetap milik repo project sampai contract shared yang sesuai tersedia.
+Shared DEV-INFRA repository audit telah dijalankan lokal terhadap commit awal:
+`.artifacts/shared-audit/result.json` berisi `status=pass`, `dirty=false`,
+79 file diperiksa, 3 tautan lokal, dan nol temuan. Caller workflow di proyek
+memakai reusable workflow DEV-INFRA pada SHA yang sama dengan `infra-ref`;
+implementasi shared tidak disalin. Audit ini hanya higiene repo; tes aplikasi
+dan verifikasi Word tetap bukti terpisah. Run hosted perlu diperiksa sesudah push.
 
 PWA pernah dipasang dan dibuka pada emulator MuMu Android 15 dengan `adb reverse`.
 Tombol kamera memanggil kamera native, tetapi frame kamera abu-abu dan tidak ada
