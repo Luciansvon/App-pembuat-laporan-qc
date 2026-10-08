@@ -7,6 +7,7 @@ export type Tab = 'overview' | 'photos' | 'measurements' | 'tests' | 'issues' | 
 const sections = ['PRODUCT_VIEW', 'PRODUCT_DETAIL', 'DRAWING', 'DIMENSION', 'MC', 'GLOSS', 'SWATCH', 'ISSUE', 'OTHER']
 const sectionLabel = (section: string) => section.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
 const axes = ['L', 'W', 'D', 'H']
+const isDesktopView = typeof navigator !== 'undefined' && navigator.userAgent.includes('pywebview')
 
 function initialDraft(inspection: Inspection): Record<string, string> {
   const result: Record<string, string> = {
@@ -68,7 +69,7 @@ function Overview({ inspection, run, onPendingChange }: { inspection: Inspection
   </div>
 }
 
-function Photos({ inspection, run, captureIssue, refresh }: { inspection: Inspection; run: Action; captureIssue: string | null; refresh: () => Promise<void> }) {
+function Photos({ inspection, run, captureIssue, refresh, goIssues }: { inspection: Inspection; run: Action; captureIssue: string | null; refresh: () => Promise<void>; goIssues: () => void }) {
   const input = useRef<HTMLInputElement>(null)
   const uploadTarget = useRef<{ section: string; issueId: string }>({ section: captureIssue ? 'ISSUE' : 'PRODUCT_VIEW', issueId: captureIssue || '' })
   const [section, setSection] = useState(captureIssue ? 'ISSUE' : 'PRODUCT_VIEW')
@@ -80,7 +81,7 @@ function Photos({ inspection, run, captureIssue, refresh }: { inspection: Inspec
   function quickCapture(nextSection: string) { setSection(nextSection); if (nextSection !== 'ISSUE') setIssueId(''); uploadTarget.current = { section: nextSection, issueId: nextSection === 'ISSUE' ? issueId : '' }; input.current?.click() }
   async function reorder(source: Photo, target: Photo) {
     if (source.id === target.id) return
-    await run(async () => {
+    const saved = await run(async () => {
       await api.patchPhoto(source.id, { sort_order: target.sort_order })
       try {
         await api.patchPhoto(target.id, { sort_order: source.sort_order })
@@ -93,11 +94,13 @@ function Photos({ inspection, run, captureIssue, refresh }: { inspection: Inspec
         throw cause
       }
     }, 'Urutan foto tersimpan.')
-    await refresh()
+    // run() sudah memuat ulang dari server saat sukses; refresh eksplisit
+    // hanya untuk meluruskan tampilan bila gagal.
+    if (!saved) await refresh()
   }
   return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">02 / PHOTOS</span><h2>Foto inspeksi</h2></div><p>Caption tampil di tengah bawah satu foto atau sepasang foto pada laporan Word. JPG, PNG, WebP; maksimum 20 MB per file.</p></div>
     <div className="capture-grid">{['PRODUCT_VIEW', 'DIMENSION', 'MC', 'GLOSS', 'ISSUE'].map((item) => <button key={item} type="button" onClick={() => quickCapture(item)}><span>＋</span>{sectionLabel(item)}</button>)}</div>
-    <div className="upload-tools"><label>Section<select value={section} onChange={(event) => setSection(event.target.value)}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select></label>{section === 'ISSUE' && <label>Issue<select value={issueId} onChange={(event) => setIssueId(event.target.value)}><option value="">Belum ditautkan</option>{inspection.issues.map((issue) => <option key={issue.id} value={issue.id}>{issue.defect_type}</option>)}</select></label>}<button type="button" className="small-action" onClick={() => { uploadTarget.current = { section, issueId }; input.current?.click() }}>+ Tambah foto</button></div>
+    <div className="upload-tools"><label>Section<select value={section} onChange={(event) => setSection(event.target.value)}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select></label>{section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <label>Issue<select value={issueId} onChange={(event) => setIssueId(event.target.value)}><option value="">Belum ditautkan</option>{inspection.issues.map((issue) => <option key={issue.id} value={issue.id}>{issue.defect_type}</option>)}</select></label>)}<button type="button" className="small-action" onClick={() => { uploadTarget.current = { section, issueId }; input.current?.click() }}>+ Tambah foto</button></div>
     <input ref={input} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={(event) => {
       const files = event.target.files
       if (files?.length) { const target = uploadTarget.current; void run(() => api.upload(inspection.id, target.section, files, target.issueId || undefined), `${files.length} foto tersimpan.`) }
@@ -105,7 +108,7 @@ function Photos({ inspection, run, captureIssue, refresh }: { inspection: Inspec
     }} aria-label="Unggah atau ambil foto" />
     {ordered.length === 0 ? <p className="empty-inline">Belum ada foto. Pilih tombol kamera di atas.</p> : <div className="photo-list">{ordered.map((photo, index) => <article className="photo-card" key={photo.id} draggable onDragStart={() => setDragged(photo.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { const source = ordered.find((item) => item.id === dragged); if (source) void reorder(source, photo); setDragged(null) }}>
       <button type="button" className="photo-thumb" onClick={() => setPreview(photo.id)} aria-label={`Lihat foto ${index + 1} penuh`}><img src={`/api/photos/${photo.id}/file?v=${inspection.revision}`} alt={photo.caption || `Foto ${sectionLabel(photo.section)} ${index + 1}`} loading="lazy" /></button>
-      <div className="photo-meta"><span className="section-kicker">{String(index + 1).padStart(2, '0')} / {sectionLabel(photo.section)}</span><label>Caption<input key={`${photo.id}-${photo.caption}`} defaultValue={photo.caption || ''} placeholder="Keterangan foto" onBlur={(event) => { if (event.target.value !== (photo.caption || '')) void run(() => api.patchPhoto(photo.id, { caption: event.target.value }), 'Caption tersimpan.') }} /></label><div className="photo-controls"><select aria-label="Pindah section" value={photo.section} onChange={(event) => void run(() => api.patchPhoto(photo.id, { section: event.target.value, issue_id: event.target.value === 'ISSUE' ? photo.issue_id : null }), 'Section foto diperbarui.')}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select>{photo.section === 'ISSUE' && <select aria-label="Tautkan issue" value={photo.issue_id || ''} onChange={(event) => void run(() => api.patchPhoto(photo.id, { issue_id: event.target.value || null }), 'Tautan issue diperbarui.')}><option value="">Issue belum dipilih</option>{inspection.issues.map((item) => <option key={item.id} value={item.id}>{item.defect_type}</option>)}</select>}</div><div className="photo-controls"><button type="button" disabled={index === 0} onClick={() => void reorder(photo, ordered[index - 1]!)}>↑</button><button type="button" disabled={index === ordered.length - 1} onClick={() => void reorder(photo, ordered[index + 1]!)}>↓</button><button type="button" onClick={() => void run(() => api.patchPhoto(photo.id, { rotate_degrees: 90 }), 'Foto diputar.')}>Putar</button><button type="button" className="danger-text" onClick={() => { if (window.confirm('Hapus foto ini?')) void run(() => api.deletePhoto(photo.id), 'Foto dihapus.') }}>Hapus</button></div></div>
+      <div className="photo-meta"><span className="section-kicker">{String(index + 1).padStart(2, '0')} / {sectionLabel(photo.section)}</span><label>Caption<input key={`${photo.id}-${photo.caption}`} defaultValue={photo.caption || ''} placeholder="Keterangan foto" onBlur={(event) => { if (event.target.value !== (photo.caption || '')) void run(() => api.patchPhoto(photo.id, { caption: event.target.value }), 'Caption tersimpan.') }} /></label><div className="photo-controls"><select aria-label="Pindah section" value={photo.section} onChange={(event) => void run(() => api.patchPhoto(photo.id, { section: event.target.value, issue_id: event.target.value === 'ISSUE' ? photo.issue_id : null }), 'Section foto diperbarui.')}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select>{photo.section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <select aria-label="Tautkan issue" value={photo.issue_id || ''} onChange={(event) => void run(() => api.patchPhoto(photo.id, { issue_id: event.target.value || null }), 'Tautan issue diperbarui.')}><option value="">Issue belum dipilih</option>{inspection.issues.map((item) => <option key={item.id} value={item.id}>{item.defect_type}</option>)}</select>)}</div><div className="photo-controls"><button type="button" disabled={index === 0} onClick={() => void reorder(photo, ordered[index - 1]!)}>↑</button><button type="button" disabled={index === ordered.length - 1} onClick={() => void reorder(photo, ordered[index + 1]!)}>↓</button><button type="button" onClick={() => void run(() => api.patchPhoto(photo.id, { rotate_degrees: 90 }), 'Foto diputar.')}>Putar</button><button type="button" className="danger-text" onClick={() => { if (window.confirm('Hapus foto ini?')) void run(() => api.deletePhoto(photo.id), 'Foto dihapus.') }}>Hapus</button></div></div>
     </article>)}</div>}
     {preview && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label="Foto penuh" onClick={() => setPreview(null)}><button type="button" onClick={() => setPreview(null)}>Tutup ×</button><img src={`/api/photos/${preview}/file?v=${inspection.revision}`} alt="Foto penuh" /></div>}
   </div>
@@ -171,7 +174,6 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
   const [preview, setPreview] = useState<ReportPreview | null>(null)
   const [selectedPage, setSelectedPage] = useState(0)
   const [message, setMessage] = useState('')
-  const isDesktopView = typeof navigator !== 'undefined' && navigator.userAgent.includes('pywebview')
   useEffect(() => { let active = true; api.validate(inspection.id).then((result) => { if (active) setReview(result) }).catch((cause) => { if (active) setMessage(String(cause)) }); return () => { active = false } }, [inspection.id, inspection.revision])
   async function showPreview() {
     setPreviewBusy(true)
@@ -218,7 +220,7 @@ export default function Workspace({ inspection, defects, run, refresh, onDelete,
   const tabs: { id: Tab; label: string }[] = [{ id: 'overview', label: 'Overview' }, { id: 'photos', label: 'Photos' }, { id: 'measurements', label: 'Measurement' }, { id: 'tests', label: 'Tests' }, { id: 'issues', label: 'Issues' }, { id: 'review', label: 'Review & Report' }]
   return <section className="workspace"><div className="workspace-tabs" role="tablist" aria-label="Bagian inspeksi">{tabs.map((item, index) => <button type="button" key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'active' : ''} disabled={busy} onClick={() => setTab(item.id)}><span className="step-number">{index + 1}</span>{item.label}</button>)}</div>
     {tab === 'overview' && <Overview inspection={inspection} run={run} onPendingChange={onPendingChange} />}
-    {tab === 'photos' && <Photos inspection={inspection} run={run} captureIssue={captureIssue} refresh={refresh} />}
+    {tab === 'photos' && <Photos inspection={inspection} run={run} captureIssue={captureIssue} refresh={refresh} goIssues={() => setTab('issues')} />}
     {tab === 'measurements' && <Measurements inspection={inspection} run={run} tests={false} />}
     {tab === 'tests' && <Measurements inspection={inspection} run={run} tests />}
     {tab === 'issues' && <Issues inspection={inspection} defects={defects} run={run} capture={(issueId) => { setCaptureIssue(issueId); setTab('photos') }} onPendingChange={onPendingChange} />}
