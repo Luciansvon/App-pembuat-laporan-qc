@@ -6,6 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +28,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         migration_config = Config(str(RESOURCE_ROOT / "backend" / "alembic.ini"))
         migration_config.set_main_option("sqlalchemy.url", "sqlite://")
+        if ScriptDirectory.from_config(migration_config).get_current_head() is None:
+            raise RuntimeError("No database migration revisions found")
         # The migration environment reads this task's configured local data path.
         import os
         previous_data_dir = os.environ.get("QC_DATA_DIR")
