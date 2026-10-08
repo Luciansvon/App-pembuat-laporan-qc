@@ -1,78 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../services/api'
 import { getHealth } from '../services/health'
 import type { Customer, Defect, Inspection, Product } from '../types/qc'
-import Workspace from './Workspace'
+import Icon, { type IconName } from '../components/Icon'
+import FurnitureScene from '../components/FurnitureScene'
+import NewInspection from './NewInspection'
+import Workspace, { type Tab } from './Workspace'
 
+type View = 'home' | 'inspections' | 'master' | 'reports' | 'settings'
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' })
-const axes = ['L', 'W', 'D', 'H'] as const
+const dateLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+const statusLabel = (status: string) => ({ DRAFT: 'Draft', IN_PROGRESS: 'Dikerjakan', REVIEW: 'Review', COMPLETED: 'Selesai' })[status] || status
+const navigation: { id: View; label: string; icon: IconName }[] = [
+  { id: 'home', label: 'Beranda', icon: 'home' }, { id: 'inspections', label: 'Inspeksi', icon: 'inspection' },
+  { id: 'master', label: 'Data master', icon: 'master' }, { id: 'reports', label: 'Laporan', icon: 'report' },
+  { id: 'settings', label: 'Pengaturan', icon: 'settings' },
+]
 
-function NewInspection({ customers, products, onCreate, onRefresh }: {
-  customers: Customer[]; products: Product[];
-  onCreate: (body: Record<string, unknown>) => Promise<void>;
-  onRefresh: () => Promise<void>
-}) {
-  const [customerId, setCustomerId] = useState('')
-  const [productId, setProductId] = useState('')
-  const [newCustomer, setNewCustomer] = useState(false)
-  const [newProduct, setNewProduct] = useState(false)
-  const [customerName, setCustomerName] = useState('')
-  const [customerCode, setCustomerCode] = useState('')
-  const [productName, setProductName] = useState('')
-  const [standard, setStandard] = useState<Record<string, string>>({})
-  const [po, setPo] = useState('')
-  const [inspectionType, setInspectionType] = useState('INLINE')
-  const [date, setDate] = useState(today())
-  const [location, setLocation] = useState('QSF')
-  const [qcName, setQcName] = useState('')
-  const [quantity, setQuantity] = useState('')
-  const [aql, setAql] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const customerProducts = useMemo(() => products.filter((product) => product.customer_id === customerId), [products, customerId])
-
-  async function createCustomer() {
-    setBusy(true); setError('')
-    try {
-      const saved = await api.createCustomer({ code: customerCode.trim().toUpperCase(), name: customerName.trim() })
-      await onRefresh(); setCustomerId(saved.id); setProductId(''); setNewCustomer(false)
-    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
-  }
-  async function createProduct() {
-    if (!customerId) return setError('Pilih customer dahulu.')
-    setBusy(true); setError('')
-    try {
-      const dimensions = Object.fromEntries(Object.entries(standard).filter(([, value]) => value !== '').map(([key, value]) => [key, Number(value)]))
-      const saved = await api.createProduct({ customer_id: customerId, name: productName.trim(), standard_dimensions: dimensions })
-      await onRefresh(); setProductId(saved.id); setNewProduct(false)
-    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
-  }
-
-  return <form className="field-card new-inspection" onSubmit={async (event) => {
-    event.preventDefault(); setBusy(true); setError('')
-    try {
-      await onCreate({ product_id: productId, po, inspection_type: inspectionType, date, location, qc_name: qcName, quantity: Number(quantity), aql: aql || null })
-    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
-  }}>
-    <div className="field-card-heading"><div><span className="section-kicker">INSPEKSI BARU</span><h2>Identitas produk</h2></div><p>Metadata ini akan muncul pada setiap halaman Word.</p></div>
-    <div className="form-grid">
-      <label>Customer<select value={customerId} onChange={(event) => { setCustomerId(event.target.value); setProductId('') }} required><option value="">Pilih customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.code} — {customer.name}</option>)}</select></label>
-      <button className="small-action" type="button" onClick={() => setNewCustomer(!newCustomer)}>+ Customer baru</button>
-      {newCustomer && <div className="inline-editor"><label>Kode<input value={customerCode} onChange={(event) => setCustomerCode(event.target.value)} placeholder="POLIFORM" /></label><label>Nama<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Nama customer" /></label><button type="button" disabled={busy || !customerCode || !customerName} onClick={createCustomer}>Simpan customer</button></div>}
-      <label>Produk<select value={productId} onChange={(event) => setProductId(event.target.value)} required><option value="">Pilih produk</option>{customerProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
-      <button className="small-action" type="button" onClick={() => setNewProduct(!newProduct)}>+ Produk baru</button>
-      {newProduct && <div className="inline-editor"><label>Nama produk<input value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Nama pada DESC" /></label><div className="axis-fields">{axes.map((axis) => <label key={axis}>Standar {axis} mm<input type="number" step="any" value={standard[axis] || ''} onChange={(event) => setStandard({ ...standard, [axis]: event.target.value })} /></label>)}</div><button type="button" disabled={busy || !productName || !customerId} onClick={createProduct}>Simpan produk</button></div>}
-      <label>PO<input value={po} onChange={(event) => setPo(event.target.value)} required placeholder="PO tunggal atau multi-nilai" /></label>
-      <label>Jenis inspeksi<select value={inspectionType} onChange={(event) => setInspectionType(event.target.value)}><option value="INLINE">INLINE</option><option value="FINAL">FINAL</option><option value="PRE_SHIPMENT">PRE SHIPMENT</option><option value="OTHER">OTHER</option></select></label>
-      <label>Tanggal<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
-      <label>Lokasi<input value={location} onChange={(event) => setLocation(event.target.value)} /></label>
-      <label>Nama QC<input value={qcName} onChange={(event) => setQcName(event.target.value)} required placeholder="Petugas inspeksi" /></label>
-      <label>QTY<input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>
-      <label>AQL sesuai dokumen<input value={aql} onChange={(event) => setAql(event.target.value)} placeholder="Opsional; makna belum diasumsikan" /></label>
-    </div>
-    {error && <p className="form-error" role="alert">{error}</p>}
-    <button className="primary-action" type="submit" disabled={busy || !productId}>{busy ? 'Menyimpan…' : 'Buat inspeksi'}</button>
-  </form>
+function InspectionTable({ items, onOpen, reports = false }: { items: Inspection[]; onOpen: (id: string, tab: Tab) => void; reports?: boolean }) {
+  const tab = reports ? 'review' : 'overview'
+  return <div className="table-scroll"><table className="inspection-table"><thead><tr><th>Inspeksi / tanggal</th><th>Produk</th><th>Customer</th><th>Qty</th><th>Status</th><th><span className="visually-hidden">Buka</span></th></tr></thead><tbody>{items.map(item => <tr key={item.id}>
+    <td><button type="button" className="table-link" onClick={() => onOpen(item.id, tab)}>{item.inspection_number}</button><small>{dateLabel(item.date)}</small></td>
+    <td><strong>{item.product_name}</strong><small>PO {item.po}</small></td><td>{item.customer_name}</td><td className="numeric">{item.quantity}</td>
+    <td><span className={`status-badge ${item.status.toLowerCase()}`}>{statusLabel(item.status)}</span></td>
+    <td><button type="button" className="icon-button" aria-label={`${reports ? 'Review laporan' : 'Buka inspeksi'} ${item.inspection_number}`} onClick={() => onOpen(item.id, tab)}><Icon name="arrow" /></button></td>
+  </tr>)}</tbody></table></div>
 }
 
 export default function QcApp() {
@@ -81,78 +33,87 @@ export default function QcApp() {
   const [inspections, setInspections] = useState<Inspection[]>([])
   const [defects, setDefects] = useState<Defect[]>([])
   const [current, setCurrent] = useState<Inspection | null>(null)
+  const [view, setView] = useState<View>('home')
   const [creating, setCreating] = useState(false)
+  const [initialTab, setInitialTab] = useState<Tab>('overview')
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
   const [connection, setConnection] = useState<'checking' | 'connected' | 'unavailable'>('checking')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [pending, setPending] = useState(false)
+  const locked = pending || saving
 
-  async function refreshLists() {
-    const [customersResult, productsResult, inspectionsResult, defectsResult] = await Promise.all([
-      api.customers(), api.products(), api.inspections(), api.defects(),
-    ])
-    setCustomers(customersResult); setProducts(productsResult)
-    setInspections(inspectionsResult); setDefects(defectsResult)
-  }
-  async function refreshCurrent(id = current?.id) {
-    if (id) setCurrent(await api.inspection(id))
-    await refreshLists()
-  }
+  const refreshLists = useCallback(async () => {
+    const [nextCustomers, nextProducts, nextInspections, nextDefects] = await Promise.all([api.customers(), api.products(), api.inspections(), api.defects()])
+    setCustomers(nextCustomers); setProducts(nextProducts); setInspections(nextInspections); setDefects(nextDefects)
+  }, [])
+  const refreshCurrent = useCallback(async (id?: string) => { if (id) setCurrent(await api.inspection(id)); await refreshLists() }, [refreshLists])
   useEffect(() => {
     let mounted = true
     Promise.all([getHealth(), api.customers(), api.products(), api.inspections(), api.defects()])
       .then(([, nextCustomers, nextProducts, nextInspections, nextDefects]) => {
         if (!mounted) return
-        setConnection('connected'); setCustomers(nextCustomers); setProducts(nextProducts)
-        setInspections(nextInspections); setDefects(nextDefects)
+        setConnection('connected'); setCustomers(nextCustomers); setProducts(nextProducts); setInspections(nextInspections); setDefects(nextDefects)
       }).catch(() => { if (mounted) setConnection('unavailable') })
     return () => { mounted = false }
   }, [])
+  const run = useCallback(async (action: () => Promise<unknown>, success = 'Tersimpan.'): Promise<boolean> => {
+    setError(''); setMessage('Menyimpan…'); setSaving(true)
+    try { await action(); await refreshCurrent(current?.id); setMessage(success); return true }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan'); return false }
+    finally { setSaving(false); setPending(false) }
+  }, [current?.id, refreshCurrent])
+  function navigate(target: View) { if (locked) return; setCurrent(null); setCreating(false); setView(target); setError(''); setMessage(''); setSearch(''); setStatusFilter('ALL') }
+  function startNew() { if (locked) return; setCurrent(null); setCreating(true); setView('inspections'); setError(''); setMessage('') }
+  async function create(body: Record<string, unknown>) { const saved = await api.createInspection(body); await refreshLists(); setCurrent(await api.inspection(saved.id)); setCreating(false); setInitialTab('overview'); setMessage('Inspeksi baru tersimpan.') }
+  async function open(id: string, tab: Tab) { if (locked) return; setError(''); try { setCurrent(await api.inspection(id)); setInitialTab(tab); setCreating(false); setView(tab === 'review' ? 'reports' : 'inspections') } catch (cause) { setError(String(cause)) } }
+  async function deleteCurrent(id: string) { setError(''); setMessage('Menghapus…'); try { await api.deleteInspection(id); setCurrent(null); await refreshLists(); setMessage('Inspeksi dihapus.') } catch (cause) { setError(String(cause)); setMessage('Gagal menghapus') } }
+  const filtered = useMemo(() => inspections.filter(item => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? ['IN_PROGRESS', 'REVIEW'].includes(item.status) : item.status === statusFilter)) && [item.inspection_number, item.product_name, item.customer_name, item.po].join(' ').toLowerCase().includes(search.toLowerCase())), [inspections, search, statusFilter])
+  const stats: { label: string; value: number; icon: IconName; tone: string; filter: string; hint: string }[] = [
+    { label: 'Total inspeksi', value: inspections.length, icon: 'inspection', tone: 'sage', filter: 'ALL', hint: 'Semua data tersimpan' },
+    { label: 'Selesai', value: inspections.filter(item => item.status === 'COMPLETED').length, icon: 'check', tone: 'green', filter: 'COMPLETED', hint: 'Ditandai selesai oleh QC' },
+    { label: 'Draft', value: inspections.filter(item => item.status === 'DRAFT').length, icon: 'report', tone: 'amber', filter: 'DRAFT', hint: 'Siap dilanjutkan' },
+    { label: 'Dalam proses', value: inspections.filter(item => ['IN_PROGRESS', 'REVIEW'].includes(item.status)).length, icon: 'clock', tone: 'clay', filter: 'ACTIVE', hint: 'Dikerjakan atau direview' },
+  ]
+  const user = current?.qc_name || inspections[0]?.qc_name || 'QC'
+  const title = current ? current.inspection_number : creating ? 'Inspeksi baru' : view === 'home' ? 'Selamat datang.' : navigation.find(item => item.id === view)?.label || 'Inspectra'
 
-  async function run(action: () => Promise<unknown>, success = 'Tersimpan.') {
-    setError(''); setMessage('Menyimpan…')
-    try { await action(); await refreshCurrent(); setMessage(success) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan') }
-  }
-  async function create(body: Record<string, unknown>) {
-    const saved = await api.createInspection(body)
-    await refreshLists(); setCurrent(await api.inspection(saved.id)); setCreating(false); setMessage('Inspeksi baru tersimpan.')
-  }
-  async function open(id: string) {
-    setError('')
-    try { setCurrent(await api.inspection(id)); setCreating(false) } catch (cause) { setError(String(cause)) }
-  }
-  async function deleteCurrent(id: string) {
-    setError(''); setMessage('Menghapus…')
-    try {
-      await api.deleteInspection(id)
-      setCurrent(null)
-      await refreshLists()
-      setMessage('Inspeksi dihapus.')
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-      setMessage('Gagal menghapus')
-    }
-  }
-
-  return <div className="app-shell qc-shell">
+  return <div className="app-shell qc-shell"><a href="#main-content" className="skip-link">Langsung ke isi</a>
     <aside className="rail" aria-label="Navigasi utama">
-      <button type="button" className="brand brand-button" onClick={() => { setCurrent(null); setCreating(false); void refreshLists() }}><span className="brand-mark" aria-hidden="true"><span /><span /><span /></span><span><strong>Inspectra</strong><small>QC / V0.1</small></span></button>
-      <p className="rail-label">WORKSPACE</p>
-      <nav><button type="button" onClick={() => { setCurrent(null); setCreating(false) }}>Semua inspeksi</button><button type="button" disabled={connection !== 'connected'} onClick={() => { setCurrent(null); setCreating(true) }}>+ Inspeksi baru</button></nav>
-      <div className="rail-footer"><span className="rail-footer-key">PENYIMPANAN LOKAL</span><span>SQLite & foto pada server kerja QC.</span></div>
+      <button type="button" className="brand-button" disabled={locked} onClick={() => navigate('home')}><img src="/icon-192.png" alt="" /><span><strong>Inspectra</strong><small>Furniture quality control</small></span></button>
+      <p className="rail-label">RUANG KERJA</p>
+      <nav>{navigation.map(item => <button type="button" key={item.id} className={view === item.id ? 'active' : ''} aria-current={view === item.id ? 'page' : undefined} disabled={locked} onClick={() => navigate(item.id)}><Icon name={item.icon} />{item.label}{item.id === 'inspections' && <span className="nav-count">{inspections.length}</span>}</button>)}</nav>
+      <button className="rail-new" disabled={locked || connection !== 'connected'} onClick={startNew}><Icon name="plus" />Inspeksi baru</button>
+      <div className="rail-scene"><FurnitureScene /><div><span>Better quality.</span><strong>Better furniture.</strong></div></div>
+      <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkan…' : 'Koneksi terputus'}<small>Inspectra · v0.1</small></span></div>
     </aside>
-    <main className="main-content qc-content">
-      <div className="topline"><span>INSPECTRA</span><span>{today()}</span></div>
-      <div className="page-head"><div><span className="section-kicker">INSPEKSI FURNITUR</span><h1>{current ? current.product_name : creating ? 'Inspeksi baru' : 'Laporan QC'}</h1><p>{current ? `${current.customer_name}  /  ${current.inspection_number}` : 'Catat di lapangan. Susun laporan Word dari data yang sudah diperiksa.'}</p></div>{!current && !creating && connection === 'connected' && <button className="primary-action" type="button" onClick={() => setCreating(true)}>+ Buat inspeksi</button>}{current && <button className="small-action" type="button" onClick={() => setCurrent(null)}>← Semua inspeksi</button>}</div>
-      <div className={`app-connection ${connection}`} role="status"><span className="status-dot" />{connection === 'connected' ? 'Server & SQLite terhubung' : connection === 'checking' ? 'Memeriksa server lokal…' : 'Server lokal tidak terhubung. Jalankan backend untuk menyimpan data.'}</div>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {message && !error && <p className="save-message" role="status">{message}</p>}
-      {connection === 'unavailable' ? <section className="dashboard-list"><div className="empty-state"><strong>Server lokal terputus.</strong><p>Daftar inspeksi belum bisa dibaca. Data yang sudah tersimpan tetap ada di SQLite pada server kerja QC.</p><button className="primary-action" type="button" onClick={() => window.location.reload()}>Coba sambung ulang</button></div></section>
-        : connection === 'checking' ? <section className="dashboard-list"><div className="empty-state">Memuat data inspeksi…</div></section>
-        : current ? <Workspace inspection={current} defects={defects} run={run} refresh={() => refreshCurrent(current.id)} onDelete={() => deleteCurrent(current.id)} />
-        : creating ? <NewInspection customers={customers} products={products} onCreate={create} onRefresh={refreshLists} />
-          : <section className="dashboard-list"><div className="list-title"><h2>Inspeksi tersimpan</h2><span>{inspections.length} laporan</span></div>{inspections.length === 0 ? <div className="empty-state"><strong>Belum ada inspeksi.</strong><p>Mulai dengan membuat customer, produk, lalu inspeksi pertama.</p><button className="primary-action" onClick={() => setCreating(true)}>+ Buat inspeksi</button></div> : inspections.map((item) => <button className="inspection-row" key={item.id} onClick={() => void open(item.id)}><span className="inspection-number">{item.inspection_number}<small>{item.date}</small></span><span><strong>{item.product_name}</strong><small>{item.customer_name} · PO {item.po}</small></span><span className="status-label">{item.status}</span><span className="row-arrow">↗</span></button>)}</section>}
-      <footer>LOCAL FIRST <span>•</span> SQLITE <span>•</span> WORD REPORT</footer>
-    </main>
+    <div className="content-shell"><header className="topbar"><div className="breadcrumb">{current || creating ? <><button disabled={locked} onClick={() => navigate(view)}>{view === 'reports' ? 'Laporan' : 'Inspeksi'}</button><span>/</span>{current?.inspection_number || 'Baru'}</> : navigation.find(item => item.id === view)?.label}</div>
+      {!current && !creating && view !== 'settings' && <label className="global-search"><Icon name="search" /><input aria-label="Cari inspeksi, PO, produk atau customer" value={search} onChange={event => { setSearch(event.target.value); if (view === 'home') setView('inspections') }} placeholder="Cari inspeksi, PO, produk atau customer…" /></label>}
+      <div className="qc-user"><span className="avatar">{user.split(' ').map(word => word[0]).slice(0, 2).join('').toUpperCase()}</span><span>{user}<small>QC workspace</small></span></div>
+    </header><main className="main-content qc-content" id="main-content">
+      <div className="page-head"><div><span className="section-kicker">{current ? current.customer_name : dateLabel(today())}</span><h1>{title}{current && <span className={`status-badge ${current.status.toLowerCase()}`}>{statusLabel(current.status)}</span>}</h1><p>{current ? `${current.product_name} · PO ${current.po} · ${dateLabel(current.date)} · ${current.location || 'Lokasi belum diisi'}` : creating ? 'Lengkapi identitas, lalu lanjutkan pemeriksaan produk.' : view === 'home' ? 'Mulai inspeksi baru atau lanjutkan pekerjaan yang sudah ada.' : view === 'reports' ? 'Pilih inspeksi untuk periksa halaman dan membuat laporan Word.' : view === 'master' ? 'Customer, produk, dan pustaka defect untuk inspeksi.' : view === 'settings' ? 'Informasi aplikasi dan penyimpanan di komputer ini.' : 'Semua inspeksi tersimpan di ruang kerja lokal.'}</p></div>
+        {connection === 'connected' && !current && !creating && ['home', 'inspections', 'reports'].includes(view) && <button type="button" className="primary-action" disabled={locked} onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}
+        {current && <button type="button" className="small-action" disabled={locked} onClick={() => navigate(view)}><Icon name="back" />Kembali ke daftar</button>}
+        {creating && <button type="button" className="small-action" onClick={() => navigate('inspections')}>Batal</button>}
+      </div>
+      {error && <p className="form-error" role="alert"><Icon name="warning" />{error}</p>}
+      {(message || pending) && !error && <p className="save-message" role="status"><Icon name={pending || saving ? 'clock' : 'check'} />{pending ? 'Perubahan belum tersimpan…' : message}</p>}
+      {connection === 'checking' ? <div className="loading-panels" aria-label="Memuat inspeksi"><div /><div /><div /></div>
+      : <>{connection === 'unavailable' && <div className="save-recovery" role="alert">Koneksi ke penyimpanan lokal terputus. Draf yang sedang dibuka tetap ditampilkan agar tidak hilang; penyimpanan baru akan gagal sampai tersambung.<button type="button" onClick={() => window.location.reload()}>Coba sambung ulang</button></div>}
+      {connection === 'unavailable' && !current && !creating ? <div className="panel empty-state"><Icon name="database" /><h2>Penyimpanan belum terhubung</h2><p>Data tetap tersimpan di komputer ini. Buka kembali aplikasi untuk menyambung.</p><button className="primary-action" onClick={() => window.location.reload()}><Icon name="refresh" />Coba sambung ulang</button></div>
+      : current ? <Workspace key={current.id} inspection={current} defects={defects} run={run} refresh={() => refreshCurrent(current.id)} onDelete={() => deleteCurrent(current.id)} initialTab={initialTab} onPendingChange={setPending} busy={locked} />
+      : creating ? <NewInspection customers={customers} products={products} onCreate={create} onRefresh={refreshLists} />
+      : view === 'master' ? <div className="master-grid"><section className="panel"><h2>Customer <span className="count-label">{customers.length}</span></h2><p>Dipilih saat membuat inspeksi.</p>{customers.filter(c => `${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())).map(c => <div className="master-row" key={c.id}><strong>{c.name}</strong><span>{c.code}</span></div>)}</section><section className="panel"><h2>Produk <span className="count-label">{products.length}</span></h2><p>Standar produk tetap terpisah dari hasil ukur.</p>{products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => <div className="master-row" key={p.id}><strong>{p.name}</strong><span>{customers.find(c => c.id === p.customer_id)?.name || '—'}</span></div>)}</section><section className="panel"><h2>Jenis defect <span className="count-label">{defects.length}</span></h2><p>Saran Cause, Repair, CAP perlu persetujuan QC.</p><div className="defect-tags">{defects.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(d => <span key={d.id}>{d.name}</span>)}</div></section><button className="small-action master-create" onClick={startNew}><Icon name="plus" />Tambah customer atau produk melalui inspeksi baru</button></div>
+      : view === 'settings' ? <div className="settings-grid"><article className="panel"><Icon name="database" /><h2>Data di komputer ini</h2><p>SQLite menyimpan inspeksi. Foto dan laporan disimpan sebagai berkas lokal. Internet tidak diperlukan saat melakukan inspeksi.</p><p className="field-help">Paket EXE menyimpan data di folder pengguna Windows. Pembaruan aplikasi mempertahankan data yang sudah ada.</p></article><article className="panel"><Icon name="report" /><h2>Preview & laporan Word</h2><p>DOCX bisa dibuat langsung dari Inspectra. Preview tiap halaman memerlukan Microsoft Word yang terpasang di Windows.</p><p className="field-help">Versi 0.1 · Tidak ada layanan AI atau akun cloud yang wajib digunakan.</p></article></div>
+      : <div className={view === 'home' ? 'dashboard-layout' : 'list-layout'}><div className="dashboard-main">
+        {view === 'home' && <div className="stats-grid">{stats.map(stat => <button key={stat.label} className={`stat-card ${stat.tone}`} onClick={() => { setView('inspections'); setStatusFilter(stat.filter) }}><Icon name={stat.icon} /><strong>{stat.value}</strong><span>{stat.label}</span><small>{stat.hint}</small></button>)}</div>}
+        <section className="panel dashboard-list"><div className="list-title"><h2>{view === 'home' ? 'Inspeksi terbaru' : view === 'reports' ? 'Review & laporan' : 'Daftar inspeksi'} <span className="count-label">{filtered.length}</span></h2>{view === 'home' ? <button className="text-action" onClick={() => setView('inspections')}>Lihat semua <Icon name="arrow" /></button> : <select className="status-filter" aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="ALL">Semua status</option><option value="ACTIVE">Dalam proses</option>{['DRAFT', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'].map(status => <option value={status} key={status}>{statusLabel(status)}</option>)}</select>}</div>
+          {filtered.length ? <InspectionTable items={view === 'home' ? filtered.slice(0, 6) : filtered} onOpen={(id, tab) => void open(id, tab)} reports={view === 'reports'} /> : <div className="empty-state"><Icon name="inspection" /><h3>{search || statusFilter !== 'ALL' ? 'Tidak ada inspeksi yang cocok' : 'Inspeksi pertamamu dimulai di sini'}</h3><p>{search || statusFilter !== 'ALL' ? 'Ubah kata pencarian atau filter status.' : 'Buat customer, pilih produk, dan catat hasil pemeriksaan.'}</p>{!search && statusFilter === 'ALL' && <button className="primary-action" onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}</div>}
+        </section>{view === 'home' && <div className="workflow-note"><Icon name="inspection" /><div><strong>Dari lantai produksi ke laporan</strong><span>Identitas → Foto → Ukuran → Test → Temuan → Review</span></div><span>6 tahap</span></div>}</div>
+        {view === 'home' && <aside className="dashboard-aside"><article className="report-promo"><div><span className="section-kicker">LAPORAN QC</span><h2>Detail yang jelas.<br />Laporan yang rapi.</h2><p>Catat temuan, periksa tiap halaman, lalu simpan sebagai Word.</p></div><FurnitureScene /><button className="primary-action" onClick={startNew}>Mulai inspeksi <Icon name="arrow" /></button></article><article className="local-note"><Icon name="database" /><div><strong>Data tersimpan lokal</strong><p>Inspeksi, foto, dan laporan tetap di komputer ini. Siap digunakan tanpa internet.</p></div></article></aside>}</div>}</>}
+      <footer className="app-footer"><span>Inspectra · Furniture QC workspace</span><span><span className={`status-dot ${connection}`} />{connection === 'connected' ? 'Penyimpanan terhubung' : 'Menunggu koneksi'}</span></footer>
+    </main></div>
   </div>
 }

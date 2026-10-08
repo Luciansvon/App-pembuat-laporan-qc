@@ -12,6 +12,8 @@ if (-not $SkipFrontendBuild) {
 }
 Push-Location $project
 try {
+    $running = Get-Process -Name 'Inspectra','QC-Report-Assistant*' -ErrorAction SilentlyContinue
+    if ($running) { throw 'Inspectra masih berjalan. Tutup aplikasi dulu lalu ulangi build agar berkas output tidak terkunci.' }
     $dataFiles = @(
         'backend\alembic.ini;backend',
         'backend\migrations;backend\migrations',
@@ -22,7 +24,6 @@ try {
         'templates\rh.docx;templates',
         'templates\default.docx;templates'
     )
-    Get-Process -Name 'QC-Report-Assistant*','Inspectra*' -ErrorAction SilentlyContinue | Stop-Process -Force
     $arguments = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed',
         '--name', 'Inspectra', '--paths', 'backend', '--distpath', '.artifacts\desktop',
         '--icon', 'assets\qc-windows.ico', '--collect-all', 'webview', '--collect-all', 'pythonnet')

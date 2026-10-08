@@ -73,6 +73,9 @@ def main() -> None:
                 log_msg("Attempting to import webview...")
                 import webview
                 log_msg("webview imported successfully. Waiting for server...")
+                # WebView2 blocks downloads unless pywebview opts in. DOCX uses
+                # a local blob URL and presents the normal Windows save dialog.
+                webview.settings["ALLOW_DOWNLOADS"] = True
 
                 if wait_for_server(url):
                     log_msg("Server ready. Creating webview window...")

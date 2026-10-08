@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './pages/QcApp'
 import './styles.css'
 import './workspace.css'
+import './redesign.css'
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
