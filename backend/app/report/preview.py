@@ -11,8 +11,6 @@ import tempfile
 from pathlib import Path
 from threading import Lock
 
-import pypdfium2 as pdfium
-
 from app.core.config import RESOURCE_ROOT
 
 _word_lock = Lock()
@@ -73,6 +71,7 @@ def render_preview(docx: Path) -> tuple[str, int]:
             work = Path(temp)
             pdf_path = work / "report.pdf"
             _export_pdf(docx, pdf_path)
+            import pypdfium2 as pdfium
             pdf = pdfium.PdfDocument(pdf_path)
             try:
                 count = len(pdf)
