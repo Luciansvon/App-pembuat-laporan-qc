@@ -1,5 +1,5 @@
 diff --git a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
-index 9ad9503..7f720ef 100644
+index 9ad9503..ccc6d00 100644
 --- a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
 +++ b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
 @@ -1,6 +1,7 @@
@@ -91,13 +91,13 @@ index 9ad9503..7f720ef 100644
 +                                    saveReport(url.getPathSegments().get(0));
                                  }
 +                                return true;
-                             }
--                            return false;
++                            }
 +                            if ("127.0.0.1".equals(url.getHost())
 +                                    || "file".equals(url.getScheme())
 +                                    || "about".equals(url.getScheme())) {
 +                                return false;
-+                            }
+                             }
+-                            return false;
 +                            if ("http".equals(url.getScheme()) || "https".equals(url.getScheme())) {
 +                                startActivity(new Intent(Intent.ACTION_VIEW, url));
 +                            }
@@ -115,38 +115,10 @@ index 9ad9503..7f720ef 100644
                          }
  
                          @Override
-@@ -233,6 +281,94 @@ public class PythonActivity extends Activity {
+@@ -233,6 +281,66 @@ public class PythonActivity extends Activity {
          }
      }
  
-+    @Override
-+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-+        super.onActivityResult(requestCode, resultCode, data);
-+        if (requestCode == REQUEST_FILE_CHOOSER && mFilePathCallback != null) {
-+            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
-+            mFilePathCallback.onReceiveValue(result);
-+            mFilePathCallback = null;
-+        } else if (requestCode == REQUEST_SAVE_REPORT) {
-+            if (resultCode == RESULT_OK && data != null && data.getData() != null
-+                    && pendingReportFile != null) {
-+                try (InputStream source = new FileInputStream(pendingReportFile);
-+                        OutputStream target = getContentResolver().openOutputStream(data.getData())) {
-+                    if (target == null) throw new IOException("No output stream");
-+                    byte[] buffer = new byte[65536];
-+                    int count;
-+                    while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count);
-+                    Toast.makeText(this, "DOCX tersimpan", Toast.LENGTH_LONG).show();
-+                } catch (IOException error) {
-+                    Log.e(TAG, "Cannot save DOCX", error);
-+                    Toast.makeText(this, "Gagal menyimpan DOCX", Toast.LENGTH_LONG).show();
-+                }
-+            }
-+            if (pendingReportFile != null) pendingReportFile.delete();
-+            pendingReportFile = null;
-+            reportSaving = false;
-+        }
-+    }
-+
 +    private void saveReport(String id) {
 +        try {
 +            java.util.UUID.fromString(id);
@@ -210,3 +182,36 @@ index 9ad9503..7f720ef 100644
      @Override
      public void onDestroy() {
          Log.i("Destroy", "end of app");
+@@ -439,6 +547,32 @@ public class PythonActivity extends Activity {
+ 
+     @Override
+     protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
++        if (requestCode == REQUEST_FILE_CHOOSER && mFilePathCallback != null) {
++            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, intent);
++            mFilePathCallback.onReceiveValue(result);
++            mFilePathCallback = null;
++            return;
++        }
++        if (requestCode == REQUEST_SAVE_REPORT) {
++            if (resultCode == RESULT_OK && intent != null && intent.getData() != null
++                    && pendingReportFile != null) {
++                try (InputStream source = new FileInputStream(pendingReportFile);
++                        OutputStream target = getContentResolver().openOutputStream(intent.getData())) {
++                    if (target == null) throw new IOException("No output stream");
++                    byte[] buffer = new byte[65536];
++                    int count;
++                    while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count);
++                    Toast.makeText(this, "DOCX tersimpan", Toast.LENGTH_LONG).show();
++                } catch (IOException error) {
++                    Log.e(TAG, "Cannot save DOCX", error);
++                    Toast.makeText(this, "Gagal menyimpan DOCX", Toast.LENGTH_LONG).show();
++                }
++            }
++            if (pendingReportFile != null) pendingReportFile.delete();
++            pendingReportFile = null;
++            reportSaving = false;
++            return;
++        }
+         if (this.activityResultListeners == null) return;
+         this.onResume();
+         synchronized (this.activityResultListeners) {
