@@ -181,7 +181,7 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
     <div className="report-actions">
       <button type="button" className="small-action" onClick={() => void api.validate(inspection.id).then(setReview)}>Periksa ulang</button>
       <button type="button" className="small-action" disabled={!ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
-      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { await api.downloadReport(inspection.id); setMessage('DOCX diunduh.') } catch (cause) { setMessage(String(cause)) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
+      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : 'DOCX diunduh.') } catch (cause) { setMessage(String(cause)) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
     </div>
     {preview && <section className="report-preview" aria-label="Preview laporan per halaman">
       <div className="report-preview-heading"><strong>Halaman {selectedPage + 1} dari {preview.page_count}</strong><span>Hasil render Microsoft Word</span></div>

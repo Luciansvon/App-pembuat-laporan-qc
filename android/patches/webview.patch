@@ -1,0 +1,212 @@
+diff --git a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
+index 9ad9503..7f720ef 100644
+--- a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
++++ b/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/PythonActivity.java
+@@ -1,6 +1,7 @@
+ package org.kivy.android;
+ 
+ import android.app.Activity;
++import android.content.ActivityNotFoundException;
+ import android.app.AlertDialog;
+ import android.content.Context;
+ import android.content.DialogInterface;
+@@ -20,15 +21,23 @@ import android.view.ViewGroup;
+ import android.view.ViewGroup.LayoutParams;
+ import android.webkit.CookieManager;
+ import android.webkit.WebBackForwardList;
++import android.webkit.WebResourceRequest;
++import android.webkit.ValueCallback;
++import android.webkit.WebChromeClient;
+ import android.webkit.WebView;
+ import android.webkit.WebViewClient;
+ import android.widget.AbsoluteLayout;
+ import android.widget.ImageView;
+ import android.widget.Toast;
+ import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
+ import java.io.IOException;
+ import java.io.InputStream;
++import java.io.OutputStream;
+ import java.lang.reflect.InvocationTargetException;
++import java.net.HttpURLConnection;
++import java.net.URL;
+ import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.Iterator;
+@@ -52,6 +61,11 @@ public class PythonActivity extends Activity {
+     protected static WebView mWebView;
+ 
+     protected static Thread mPythonThread;
++    private static final int REQUEST_FILE_CHOOSER = 8101;
++    private static final int REQUEST_SAVE_REPORT = 8102;
++    private ValueCallback<Uri[]> mFilePathCallback;
++    private File pendingReportFile;
++    private boolean reportSaving;
+ 
+     private ResourceManager resourceManager = null;
+     private Bundle mMetaData = null;
+@@ -163,24 +177,58 @@ public class PythonActivity extends Activity {
+             mWebView = new WebView(PythonActivity.mActivity);
+             mWebView.getSettings().setJavaScriptEnabled(true);
+             mWebView.getSettings().setDomStorageEnabled(true);
++            mWebView.getSettings().setUserAgentString(
++                    mWebView.getSettings().getUserAgentString() + " InspectraAndroid/0.1");
++            mWebView.setWebChromeClient(new WebChromeClient() {
++                @Override
++                public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback,
++                        WebChromeClient.FileChooserParams params) {
++                    if (mFilePathCallback != null) {
++                        mFilePathCallback.onReceiveValue(null);
++                    }
++                    mFilePathCallback = callback;
++                    try {
++                        startActivityForResult(params.createIntent(), REQUEST_FILE_CHOOSER);
++                    } catch (ActivityNotFoundException error) {
++                        mFilePathCallback = null;
++                        callback.onReceiveValue(null);
++                        Toast.makeText(PythonActivity.this, "Pemilih foto tidak tersedia", Toast.LENGTH_LONG).show();
++                    }
++                    return true;
++                }
++            });
+             mWebView.loadUrl("file:///android_asset/_load.html");
+ 
+             mWebView.setLayoutParams(
+                     new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
+             mWebView.setWebViewClient(
+                     new WebViewClient() {
+-                        @Override
+-                        public boolean shouldOverrideUrlLoading(WebView view, String url) {
+-                            Uri u = Uri.parse(url);
+-                            if (mOpenExternalLinksInBrowser) {
+-                                if (!(u.getScheme().equals("file")
+-                                        || u.getHost().equals("127.0.0.1"))) {
+-                                    Intent i = new Intent(Intent.ACTION_VIEW, u);
+-                                    startActivity(i);
+-                                    return true;
++                        private boolean handleUrl(Uri url) {
++                            if ("inspectra-report".equals(url.getScheme())) {
++                                if ("download".equals(url.getHost()) && url.getPathSegments().size() == 1) {
++                                    saveReport(url.getPathSegments().get(0));
+                                 }
++                                return true;
+                             }
+-                            return false;
++                            if ("127.0.0.1".equals(url.getHost())
++                                    || "file".equals(url.getScheme())
++                                    || "about".equals(url.getScheme())) {
++                                return false;
++                            }
++                            if ("http".equals(url.getScheme()) || "https".equals(url.getScheme())) {
++                                startActivity(new Intent(Intent.ACTION_VIEW, url));
++                            }
++                            return true;
++                        }
++
++                        @Override
++                        public boolean shouldOverrideUrlLoading(WebView view, String url) {
++                            return handleUrl(Uri.parse(url));
++                        }
++
++                        @Override
++                        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
++                            return handleUrl(request.getUrl());
+                         }
+ 
+                         @Override
+@@ -233,6 +281,94 @@ public class PythonActivity extends Activity {
+         }
+     }
+ 
++    @Override
++    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (requestCode == REQUEST_FILE_CHOOSER && mFilePathCallback != null) {
++            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
++            mFilePathCallback.onReceiveValue(result);
++            mFilePathCallback = null;
++        } else if (requestCode == REQUEST_SAVE_REPORT) {
++            if (resultCode == RESULT_OK && data != null && data.getData() != null
++                    && pendingReportFile != null) {
++                try (InputStream source = new FileInputStream(pendingReportFile);
++                        OutputStream target = getContentResolver().openOutputStream(data.getData())) {
++                    if (target == null) throw new IOException("No output stream");
++                    byte[] buffer = new byte[65536];
++                    int count;
++                    while ((count = source.read(buffer)) != -1) target.write(buffer, 0, count);
++                    Toast.makeText(this, "DOCX tersimpan", Toast.LENGTH_LONG).show();
++                } catch (IOException error) {
++                    Log.e(TAG, "Cannot save DOCX", error);
++                    Toast.makeText(this, "Gagal menyimpan DOCX", Toast.LENGTH_LONG).show();
++                }
++            }
++            if (pendingReportFile != null) pendingReportFile.delete();
++            pendingReportFile = null;
++            reportSaving = false;
++        }
++    }
++
++    private void saveReport(String id) {
++        try {
++            java.util.UUID.fromString(id);
++        } catch (IllegalArgumentException error) {
++            Toast.makeText(this, "ID inspeksi tidak valid", Toast.LENGTH_LONG).show();
++            return;
++        }
++        if (reportSaving) return;
++        reportSaving = true;
++        new Thread(() -> {
++            HttpURLConnection connection = null;
++            File report = new File(getCacheDir(), "Inspectra-" + id + ".docx");
++            try {
++                URL url = new URL("http://127.0.0.1:5000/api/inspections/" + id + "/report/docx");
++                connection = (HttpURLConnection) url.openConnection();
++                connection.setRequestMethod("POST");
++                connection.setConnectTimeout(5000);
++                connection.setReadTimeout(120000);
++                if (connection.getResponseCode() != 200) {
++                    throw new IOException("HTTP " + connection.getResponseCode());
++                }
++                try (InputStream source = connection.getInputStream();
++                        OutputStream target = new FileOutputStream(report)) {
++                    byte[] buffer = new byte[65536];
++                    int count;
++                    long total = 0;
++                    while ((count = source.read(buffer)) != -1) {
++                        total += count;
++                        if (total > 100_000_000) throw new IOException("DOCX too large");
++                        target.write(buffer, 0, count);
++                    }
++                }
++                runOnUiThread(() -> {
++                    pendingReportFile = report;
++                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
++                    intent.addCategory(Intent.CATEGORY_OPENABLE);
++                    intent.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
++                    intent.putExtra(Intent.EXTRA_TITLE, report.getName());
++                    try {
++                        startActivityForResult(intent, REQUEST_SAVE_REPORT);
++                    } catch (ActivityNotFoundException error) {
++                        report.delete();
++                        pendingReportFile = null;
++                        reportSaving = false;
++                        Toast.makeText(this, "Pemilih lokasi simpan tidak tersedia", Toast.LENGTH_LONG).show();
++                    }
++                });
++            } catch (IOException error) {
++                Log.e(TAG, "Cannot generate DOCX", error);
++                report.delete();
++                runOnUiThread(() -> {
++                    reportSaving = false;
++                    Toast.makeText(this, "Gagal membuat DOCX: " + error.getMessage(), Toast.LENGTH_LONG).show();
++                });
++            } finally {
++                if (connection != null) connection.disconnect();
++            }
++        }, "InspectraReportExport").start();
++    }
++
+     @Override
+     public void onDestroy() {
+         Log.i("Destroy", "end of app");

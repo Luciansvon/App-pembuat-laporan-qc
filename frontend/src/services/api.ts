@@ -56,7 +56,11 @@ export const api = {
     if (!response.ok) throw new ApiError(response.status, `Upload gagal: HTTP ${response.status}`)
     return response.json() as Promise<Photo[]>
   },
-  async downloadReport(id: string): Promise<void> {
+  async downloadReport(id: string): Promise<'downloaded' | 'save-dialog'> {
+    if (navigator.userAgent.includes('InspectraAndroid/0.1')) {
+      window.location.href = `inspectra-report://download/${encodeURIComponent(id)}`
+      return 'save-dialog'
+    }
     const response = await fetch(`/api/inspections/${id}/report/docx`, { method: 'POST' })
     if (!response.ok) {
       const body: { detail?: string | { errors?: string[] } } = await response.json()
@@ -71,5 +75,6 @@ export const api = {
     link.click()
     link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    return 'downloaded'
   },
 }

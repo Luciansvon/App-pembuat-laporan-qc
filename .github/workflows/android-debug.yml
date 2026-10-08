@@ -37,6 +37,7 @@ jobs:
             https://github.com/kivy/python-for-android.git .artifacts/p4a
           test "$(git -C .artifacts/p4a rev-parse HEAD)" = \
             58d21141f17c889bf8585f5665921d72028f8831
+          git -C .artifacts/p4a apply "$GITHUB_WORKSPACE/android/patches/webview.patch"
           python -m pip install --editable .artifacts/p4a
           python -m pip install 'Cython==3.3.0'
       - name: Prepare Inspectra payload
