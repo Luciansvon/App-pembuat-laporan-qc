@@ -48,6 +48,15 @@ def log_msg(msg: str) -> None:
         pass
 
 
+def server_already_running(url: str) -> bool:
+    """Check once whether our previous window left a healthy server behind."""
+    try:
+        with urllib.request.urlopen(url + "api/health", timeout=2) as response:
+            return response.status == 200
+    except OSError:
+        return False
+
+
 def main() -> None:
     try:
         configure_paths()
@@ -62,11 +71,20 @@ def main() -> None:
         use_browser = "--browser" in sys.argv
 
         log_msg(f"Initializing uvicorn server on {url}...")
-        config = uvicorn.Config(create_app(), host=host, port=port, log_config=None, log_level="warning")
-        server = uvicorn.Server(config)
-        server_thread = threading.Thread(target=server.run, daemon=True)
-        server_thread.start()
-        log_msg("Server thread started.")
+        server: uvicorn.Server | None = None
+        server_thread: threading.Thread | None = None
+        own_server = True
+        if server_already_running(url):
+            # A previous Inspectra window is still serving this port.
+            # Open a new window on it instead of fighting over the port.
+            own_server = False
+            log_msg("Server sudah berjalan. Membuka jendela tanpa server baru...")
+        else:
+            config = uvicorn.Config(create_app(), host=host, port=port, log_config=None, log_level="warning")
+            server = uvicorn.Server(config)
+            server_thread = threading.Thread(target=server.run, daemon=True)
+            server_thread.start()
+            log_msg("Server thread started.")
 
         if not use_browser:
             try:
@@ -90,7 +108,8 @@ def main() -> None:
                     log_msg("Starting webview event loop...")
                     webview.start()
                     log_msg("Webview closed by user. Shutting down server...")
-                    server.should_exit = True
+                    if own_server and server is not None:
+                        server.should_exit = True
                     sys.exit(0)
                 else:
                     log_msg("Server did not become ready in time.")
@@ -103,7 +122,8 @@ def main() -> None:
             webbrowser.open(url)
             log_msg("Browser opened.")
 
-        server_thread.join()
+        if own_server and server_thread is not None:
+            server_thread.join()
     except Exception as e:
         import traceback
         log_msg(f"Fatal launcher error: {e}\n{traceback.format_exc()}")
