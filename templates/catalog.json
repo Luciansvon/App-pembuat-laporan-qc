@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "customer_templates": {"POLIFORM": "poliform", "RH": "rh"},
+  "default_template": "default",
+  "templates": {
+    "poliform": {
+      "status": "READY",
+      "reference": "references/poliform.docx",
+      "reference_sha256": "33890f74cd6e0bf791c6ad701cf302eb82699fc199bdb43bb46d2756b101bed5",
+      "output_template": "poliform.docx",
+      "date_label": "DATE",
+      "inline_label": "INLINE",
+      "dimension_axes": ["L", "W", "H"],
+      "box_axes": ["L", "W", "H"],
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "ISSUE", "CONCLUSION"],
+      "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
+      "max_photos_per_page": 6
+    },
+    "rh": {
+      "status": "READY",
+      "reference": "references/rh.docx",
+      "reference_sha256": "5a20fdd552302d3c7b17e3451d2537c80a40323f650b5f3a6c20081ecf42caf2",
+      "output_template": "rh.docx",
+      "date_label": "DATE-LOC",
+      "inline_label": "IN LINE",
+      "dimension_axes": ["L", "D", "H"],
+      "box_axes": ["W", "D", "H"],
+      "sections": ["PRODUCT_VIEW", "DIMENSION", "MC", "GLOSS", "SWATCH", "ISSUE", "CONCLUSION"],
+      "max_photos_per_page": 6
+    },
+    "default": {
+      "status": "READY",
+      "reference": "references/poliform.docx",
+      "reference_sha256": "33890f74cd6e0bf791c6ad701cf302eb82699fc199bdb43bb46d2756b101bed5",
+      "output_template": "default.docx",
+      "date_label": "DATE",
+      "inline_label": "INLINE",
+      "dimension_axes": ["L", "W", "H"],
+      "box_axes": ["L", "W", "H"],
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "ISSUE", "CONCLUSION"],
+      "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
+      "max_photos_per_page": 6
+    }
+  }
+}
+

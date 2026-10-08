@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "required_files": ["README.md", "AGENTS.md", "docs/report-schema.md", "docs/architecture.md"],
+  "max_file_bytes": 1048576
+}
+

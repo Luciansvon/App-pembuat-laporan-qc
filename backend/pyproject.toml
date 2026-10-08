@@ -1,0 +1,19 @@
+[project]
+name = "inspectra"
+version = "0.1.0"
+description = "Local furniture QC report assistant foundation"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi==0.142.2",
+  "uvicorn==0.54.0",
+  "sqlmodel==0.0.48",
+  "alembic==1.20.0",
+  "python-docx==1.2.0",
+  "Pillow==12.3.0",
+  "python-multipart==0.0.32",
+  "pypdfium2==5.13.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "httpx==0.28.1"]
+
