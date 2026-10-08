@@ -130,7 +130,13 @@ def main() -> None:
             log_msg("Server tidak siap; browser tidak dibuka.")
 
         if own_server and server_thread is not None:
-            server_thread.join()
+            if server_thread.is_alive() and server_already_running(url):
+                server_thread.join()
+            else:
+                # Server gagal start atau mati: jangan join tanpa batas.
+                if server is not None:
+                    server.should_exit = True
+                log_msg("Server tidak sehat; launcher berhenti tanpa menggantung.")
     except Exception as e:
         import traceback
         log_msg(f"Fatal launcher error: {e}\n{traceback.format_exc()}")
