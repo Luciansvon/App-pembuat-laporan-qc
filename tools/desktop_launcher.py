@@ -113,6 +113,11 @@ def main() -> None:
                     sys.exit(0)
                 else:
                     log_msg("Server did not become ready in time.")
+                    if not own_server:
+                        # Server lama mati setelah health-check; jangan buka
+                        # browser ke URL mati, cukup catat dan berhenti.
+                        log_msg("Server lama tidak lagi merespons. Tutup jendela lama atau ulangi launcher.")
+                        return
             except Exception as e:
                 import traceback
                 log_msg(f"Webview error: {e}\n{traceback.format_exc()}")
@@ -121,6 +126,8 @@ def main() -> None:
         if wait_for_server(url):
             webbrowser.open(url)
             log_msg("Browser opened.")
+        else:
+            log_msg("Server tidak siap; browser tidak dibuka.")
 
         if own_server and server_thread is not None:
             server_thread.join()
