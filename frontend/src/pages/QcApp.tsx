@@ -67,7 +67,17 @@ export default function QcApp() {
   }, [current?.id, refreshCurrent])
   function navigate(target: View) { if (locked) return; setCurrent(null); setCreating(false); setView(target); setError(''); setMessage(''); setSearch(''); setStatusFilter('ALL') }
   function startNew() { if (locked) return; setCurrent(null); setCreating(true); setView('inspections'); setError(''); setMessage('') }
-  async function create(body: Record<string, unknown>) { const saved = await api.createInspection(body); await refreshLists(); setCurrent(await api.inspection(saved.id)); setCreating(false); setInitialTab('overview'); setMessage('Inspeksi baru tersimpan.') }
+  async function create(body: Record<string, unknown>) {
+    setError('')
+    try {
+      const saved = await api.createInspection(body)
+      await refreshLists()
+      setCurrent(await api.inspection(saved.id))
+      setCreating(false)
+      setInitialTab('overview')
+      setMessage('Inspeksi baru tersimpan.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+  }
   async function open(id: string, tab: Tab) { if (locked) return; setError(''); try { setCurrent(await api.inspection(id)); setInitialTab(tab); setCreating(false); setView(tab === 'review' ? 'reports' : 'inspections') } catch (cause) { setError(String(cause)) } }
   async function deleteCurrent(id: string) { setError(''); setMessage('Menghapus…'); try { await api.deleteInspection(id); setCurrent(null); await refreshLists(); setMessage('Inspeksi dihapus.') } catch (cause) { setError(String(cause)); setMessage('Gagal menghapus') } }
   const filtered = useMemo(() => inspections.filter(item => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? ['IN_PROGRESS', 'REVIEW'].includes(item.status) : item.status === statusFilter)) && [item.inspection_number, item.product_name, item.customer_name, item.po].join(' ').toLowerCase().includes(search.toLowerCase())), [inspections, search, statusFilter])
@@ -91,7 +101,7 @@ export default function QcApp() {
     </aside>
     <div className="content-shell"><header className="topbar"><div className="breadcrumb">{current || creating ? <><button disabled={locked} onClick={() => navigate(view)}>{view === 'reports' ? 'Laporan' : 'Inspeksi'}</button><span>/</span>{current?.inspection_number || 'Baru'}</> : navigation.find(item => item.id === view)?.label}</div>
       {!current && !creating && view !== 'settings' && <label className="global-search"><Icon name="search" /><input aria-label="Cari inspeksi, PO, produk atau customer" value={search} onChange={event => { setSearch(event.target.value); if (view === 'home') setView('inspections') }} placeholder="Cari inspeksi, PO, produk atau customer…" /></label>}
-      <div className="qc-user"><span className="avatar">{user.split(' ').map(word => word[0]).slice(0, 2).join('').toUpperCase()}</span><span>{user}<small>QC workspace</small></span></div>
+      <div className="qc-user"><span className="avatar">{user.split(' ').map(word => word.trim()[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'QC'}</span><span>{user}<small>QC workspace</small></span></div>
     </header><main className="main-content qc-content" id="main-content">
       <div className="page-head"><div><span className="section-kicker">{current ? current.customer_name : dateLabel(today())}</span><h1>{title}{current && <span className={`status-badge ${current.status.toLowerCase()}`}>{statusLabel(current.status)}</span>}</h1><p>{current ? `${current.product_name} · PO ${current.po} · ${dateLabel(current.date)} · ${current.location || 'Lokasi belum diisi'}` : creating ? 'Lengkapi identitas, lalu lanjutkan pemeriksaan produk.' : view === 'home' ? 'Mulai inspeksi baru atau lanjutkan pekerjaan yang sudah ada.' : view === 'reports' ? 'Pilih inspeksi untuk periksa halaman dan membuat laporan Word.' : view === 'master' ? 'Customer, produk, dan pustaka defect untuk inspeksi.' : view === 'settings' ? 'Informasi aplikasi dan penyimpanan di komputer ini.' : 'Semua inspeksi tersimpan di ruang kerja lokal.'}</p></div>
         {connection === 'connected' && !current && !creating && ['home', 'inspections', 'reports'].includes(view) && <button type="button" className="primary-action" disabled={locked} onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}
