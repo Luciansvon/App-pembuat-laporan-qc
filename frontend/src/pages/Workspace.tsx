@@ -80,11 +80,20 @@ function Photos({ inspection, run, captureIssue, refresh }: { inspection: Inspec
   function quickCapture(nextSection: string) { setSection(nextSection); if (nextSection !== 'ISSUE') setIssueId(''); uploadTarget.current = { section: nextSection, issueId: nextSection === 'ISSUE' ? issueId : '' }; input.current?.click() }
   async function reorder(source: Photo, target: Photo) {
     if (source.id === target.id) return
-    const saved = await run(async () => {
+    await run(async () => {
       await api.patchPhoto(source.id, { sort_order: target.sort_order })
-      await api.patchPhoto(target.id, { sort_order: source.sort_order })
+      try {
+        await api.patchPhoto(target.id, { sort_order: source.sort_order })
+      } catch (cause) {
+        try {
+          await api.patchPhoto(source.id, { sort_order: source.sort_order })
+        } catch {
+          // Biarkan refresh yang meluruskan tampilan dengan kebenaran server.
+        }
+        throw cause
+      }
     }, 'Urutan foto tersimpan.')
-    if (!saved) await refresh()
+    await refresh()
   }
   return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">02 / PHOTOS</span><h2>Foto inspeksi</h2></div><p>Caption tampil di tengah bawah satu foto atau sepasang foto pada laporan Word. JPG, PNG, WebP; maksimum 20 MB per file.</p></div>
     <div className="capture-grid">{['PRODUCT_VIEW', 'DIMENSION', 'MC', 'GLOSS', 'ISSUE'].map((item) => <button key={item} type="button" onClick={() => quickCapture(item)}><span>＋</span>{sectionLabel(item)}</button>)}</div>
@@ -162,6 +171,7 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
   const [preview, setPreview] = useState<ReportPreview | null>(null)
   const [selectedPage, setSelectedPage] = useState(0)
   const [message, setMessage] = useState('')
+  const isDesktopView = typeof navigator !== 'undefined' && navigator.userAgent.includes('pywebview')
   useEffect(() => { let active = true; api.validate(inspection.id).then((result) => { if (active) setReview(result) }).catch((cause) => { if (active) setMessage(String(cause)) }); return () => { active = false } }, [inspection.id, inspection.revision])
   async function showPreview() {
     setPreviewBusy(true)
@@ -172,7 +182,8 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
       setSelectedPage(0)
       setMessage(`${result.page_count} halaman siap diperiksa.`)
     } catch (cause) {
-      setMessage(String(cause))
+      const detail = String(cause)
+      setMessage(detail.includes('Word') ? `${detail} DOCX tetap bisa dibuat tanpa Word.` : detail)
     } finally {
       setPreviewBusy(false)
     }
@@ -186,7 +197,7 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
     <div className="report-actions">
       <button type="button" className="small-action" onClick={() => void api.validate(inspection.id).then(setReview)}>Periksa ulang</button>
       <button type="button" className="small-action" disabled={!ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
-      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : 'DOCX diunduh.') } catch (cause) { setMessage(String(cause)) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
+      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : 'DOCX diunduh.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
     </div>
     {preview && <section className="report-preview" aria-label="Preview laporan per halaman">
       <div className="report-preview-heading"><strong>Halaman {selectedPage + 1} dari {preview.page_count}</strong><span>Hasil render Microsoft Word</span></div>
