@@ -342,6 +342,8 @@ def delete_issue(item_id: str, session: Session = Depends(db)) -> dict:
     item = require(session, Issue, item_id)
     for photo in session.exec(select(InspectionPhoto).where(InspectionPhoto.issue_id == item_id)).all():
         photo.issue_id = None
+        # Kembalikan ke Product View agar foto tidak hilang diam-diam dari laporan.
+        photo.section = "PRODUCT_VIEW"
         session.add(photo)
     touch(session, item.inspection_id)
     session.delete(item)
