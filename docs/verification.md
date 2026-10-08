@@ -36,7 +36,10 @@ Shared DEV-INFRA repository audit telah dijalankan lokal terhadap commit awal:
 79 file diperiksa, 3 tautan lokal, dan nol temuan. Caller workflow di proyek
 memakai reusable workflow DEV-INFRA pada SHA yang sama dengan `infra-ref`;
 implementasi shared tidak disalin. Audit ini hanya higiene repo; tes aplikasi
-dan verifikasi Word tetap bukti terpisah. Run hosted perlu diperiksa sesudah push.
+dan verifikasi Word tetap bukti terpisah. Run hosted
+[`37729822347`](https://github.com/Luciansvon/App-pembuat-laporan-qc/actions/runs/37729822347)
+selesai `success`; artifact yang diunduh berisi `status=pass`, commit `e9e137b`,
+`dirty=false`, 80 file, 3 tautan lokal, nol temuan.
 
 PWA pernah dipasang dan dibuka pada emulator MuMu Android 15 dengan `adb reverse`.
 Tombol kamera memanggil kamera native, tetapi frame kamera abu-abu dan tidak ada

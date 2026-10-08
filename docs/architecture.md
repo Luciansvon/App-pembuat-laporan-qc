@@ -182,7 +182,8 @@ awal tersedia, auditor lokal DEV-INFRA dijalankan dari checkout shared dan
 menghasilkan `pass`, 79 file, nol temuan, pada commit awal. Caller workflow
 `.github/workflows/repository-hygiene.yml` memakai reusable workflow DEV-INFRA;
 SHA workflow dan `infra-ref` sama-sama dipin ke commit yang telah diperiksa.
-Hasil lokal bukan status GitHub; run hosted harus diperiksa terpisah.
+Hasil lokal bukan status GitHub. Run hosted pertama pada commit `e9e137b`
+selesai sukses; artifact audit menyatakan 80 file dan nol temuan.
 
 Build/test domain tetap command project dengan logs/JUnit. Hasil hygiene tidak
 membuktikan DOCX/PWA/security acceptance. Error shared workflow/runner dilaporkan
