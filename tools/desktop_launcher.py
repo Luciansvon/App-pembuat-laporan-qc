@@ -66,11 +66,31 @@ def main() -> None:
         from app.main import create_app
 
         host = "127.0.0.1"
-        port = 8765
+        use_headless = "--headless" in sys.argv
+        try:
+            port = int(os.environ.get("QC_PORT", "8765")) if use_headless else 8765
+        except ValueError:
+            log_msg("QC_PORT must be an integer between 1 and 65535.")
+            raise SystemExit(2)
+        if not 1 <= port <= 65535:
+            log_msg("QC_PORT must be an integer between 1 and 65535.")
+            raise SystemExit(2)
         url = f"http://{host}:{port}/"
         use_browser = "--browser" in sys.argv
 
         log_msg(f"Initializing uvicorn server on {url}...")
+        if use_headless:
+            # Test mode serves the packaged app without touching a GUI or
+            # attaching to another Inspectra process already on this port.
+            log_msg("Starting in explicit headless mode; no WebView or browser will open.")
+            config = uvicorn.Config(create_app(), host=host, port=port, log_config=None, log_level="warning")
+            server = uvicorn.Server(config)
+            server.run()
+            if not server.started:
+                log_msg("Headless server stopped before becoming ready.")
+                raise SystemExit(1)
+            return
+
         server: uvicorn.Server | None = None
         server_thread: threading.Thread | None = None
         own_server = True

@@ -1,12 +1,17 @@
 """Deterministic preflight from persisted QC facts."""
 from __future__ import annotations
 
+from fastapi import HTTPException
+from PIL import Image
 from sqlmodel import Session, select
 
+from app.core.config import Settings
 from app.models.tables import Inspection, InspectionPhoto, Issue, Measurement
+from app.services.storage import photo_path
 
 
-def inspect_report(session: Session, inspection: Inspection, template_ready: bool) -> dict:
+def inspect_report(session: Session, inspection: Inspection, template_config: dict,
+                   template_ready: bool, settings: Settings) -> dict:
     photos = session.exec(select(InspectionPhoto).where(InspectionPhoto.inspection_id == inspection.id)).all()
     issues = session.exec(select(Issue).where(Issue.inspection_id == inspection.id)).all()
     measurements = session.exec(select(Measurement).where(Measurement.inspection_id == inspection.id)).all()
@@ -16,6 +21,22 @@ def inspect_report(session: Session, inspection: Inspection, template_ready: boo
         errors.append("DOCX template is not ready")
     if not all((inspection.customer_name, inspection.product_name, inspection.po, inspection.qc_name, inspection.quantity)):
         errors.append("Required report header is incomplete")
+    issue_ids = {issue.id for issue in issues}
+    renderable_sections = set(template_config.get("sections", ()))
+    for photo in photos:
+        photo_label = f"Photo {photo.id[:8]} ({photo.section})"
+        if photo.issue_id is not None and photo.issue_id not in issue_ids:
+            errors.append(f"{photo_label} is linked to an unavailable issue")
+        elif photo.section == "ISSUE" and photo.issue_id is None:
+            errors.append(f"{photo_label} must be linked to an issue before report generation")
+        elif photo.issue_id is None and photo.section not in renderable_sections:
+            errors.append(f"{photo_label} is not supported by the selected report template")
+        try:
+            path = photo_path(settings, photo)
+            with Image.open(path) as image:
+                image.load()
+        except (HTTPException, OSError, ValueError, ArithmeticError, Image.DecompressionBombError):
+            errors.append(f"{photo_label} is missing or unreadable")
     if not any(photo.section == "PRODUCT_VIEW" for photo in photos):
         warnings.append("Product View photos are empty")
     if not inspection.box_dimensions:

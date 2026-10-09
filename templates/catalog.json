@@ -12,7 +12,7 @@
       "inline_label": "INLINE",
       "dimension_axes": ["L", "W", "H"],
       "box_axes": ["L", "W", "H"],
-      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "ISSUE", "CONCLUSION"],
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER", "ISSUE", "CONCLUSION"],
       "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
       "max_photos_per_page": 6
     },
@@ -25,7 +25,7 @@
       "inline_label": "IN LINE",
       "dimension_axes": ["L", "D", "H"],
       "box_axes": ["W", "D", "H"],
-      "sections": ["PRODUCT_VIEW", "DIMENSION", "MC", "GLOSS", "SWATCH", "ISSUE", "CONCLUSION"],
+      "sections": ["PRODUCT_VIEW", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
       "max_photos_per_page": 6
     },
     "default": {
@@ -37,7 +37,7 @@
       "inline_label": "INLINE",
       "dimension_axes": ["L", "W", "H"],
       "box_axes": ["L", "W", "H"],
-      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "ISSUE", "CONCLUSION"],
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
       "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
       "max_photos_per_page": 6
     }

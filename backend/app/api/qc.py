@@ -21,7 +21,7 @@ from app.schemas.qc import (CustomerIn, CustomerPatch, DefectIn, InspectionIn,
                             ReadingIn, Section)
 from app.services.review import inspect_report
 from app.services.storage import inspection_dir, photo_path, rotate_photo, save_photo
-from app.report.generator import generate_report, template_for, report_filename
+from app.report.generator import ReportAssetUnavailable, generate_report, template_for, report_filename
 from app.report.preview import PreviewUnavailable, preview_directory, preview_key, render_preview
 
 router = APIRouter()
@@ -434,18 +434,21 @@ def create_defect(data: DefectIn, session: Session = Depends(db)) -> DefectLibra
 @router.post("/inspections/{item_id}/validate")
 def validate_inspection(item_id: str, request: Request, session: Session = Depends(db)) -> dict:
     inspection = require(session, Inspection, item_id)
-    ready = template_for(inspection, request.app.state.settings)[1]
-    return inspect_report(session, inspection, ready)
+    config, ready = template_for(inspection, request.app.state.settings)
+    return inspect_report(session, inspection, config, ready, request.app.state.settings)
 
 
 @router.post("/inspections/{item_id}/report/docx")
 def report_docx(item_id: str, request: Request, session: Session = Depends(db)) -> FileResponse:
     inspection = require(session, Inspection, item_id)
-    ready = template_for(inspection, request.app.state.settings)[1]
-    review = inspect_report(session, inspection, ready)
+    config, ready = template_for(inspection, request.app.state.settings)
+    review = inspect_report(session, inspection, config, ready, request.app.state.settings)
     if review["errors"]:
         raise HTTPException(status_code=409, detail=review)
-    path = generate_report(session, inspection, request.app.state.settings)
+    try:
+        path = generate_report(session, inspection, request.app.state.settings)
+    except ReportAssetUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         filename=report_filename(inspection))
 
@@ -453,11 +456,14 @@ def report_docx(item_id: str, request: Request, session: Session = Depends(db)) 
 @router.post("/inspections/{item_id}/report/preview")
 def report_preview(item_id: str, request: Request, session: Session = Depends(db)) -> dict:
     inspection = require(session, Inspection, item_id)
-    ready = template_for(inspection, request.app.state.settings)[1]
-    review = inspect_report(session, inspection, ready)
+    config, ready = template_for(inspection, request.app.state.settings)
+    review = inspect_report(session, inspection, config, ready, request.app.state.settings)
     if review["errors"]:
         raise HTTPException(status_code=409, detail=review)
-    path = generate_report(session, inspection, request.app.state.settings)
+    try:
+        path = generate_report(session, inspection, request.app.state.settings)
+    except ReportAssetUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         key, count = render_preview(path)
     except PreviewUnavailable as exc:

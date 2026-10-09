@@ -14,6 +14,7 @@ from docx.oxml.ns import qn
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt, RGBColor
+from fastapi import HTTPException
 from PIL import Image
 from sqlmodel import Session, select
 
@@ -28,6 +29,10 @@ SECTION_TITLES = {
     "MC": "MC Check", "GLOSS": "Gloss Meter Check", "SWATCH": "Panel Swatch",
     "ISSUE": "ISSUE", "OTHER": "Other Inspection",
 }
+
+
+class ReportAssetUnavailable(Exception):
+    """A stored photo disappeared or became unreadable while building a report."""
 
 
 def template_for(inspection: Inspection, settings: Settings) -> tuple[dict, bool]:
@@ -124,6 +129,18 @@ def fitted_size(path: Path, max_width_cm: float = 7.5, max_height_cm: float = 6.
     return width * scale, height * scale
 
 
+def insert_photo(paragraph, photo: InspectionPhoto, settings: Settings,
+                 max_width_cm: float, max_height_cm: float) -> None:
+    try:
+        path = photo_path(settings, photo)
+        width, height = fitted_size(path, max_width_cm=max_width_cm, max_height_cm=max_height_cm)
+        paragraph.add_run().add_picture(str(path), width=Cm(width), height=Cm(height))
+    except (HTTPException, OSError, ValueError, ArithmeticError, Image.DecompressionBombError) as exc:
+        raise ReportAssetUnavailable(
+            f"Photo {photo.id[:8]} ({photo.section}) became unavailable during report generation"
+        ) from exc
+
+
 def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
                *, width_cm: float = 18, border: bool = True,
                single_height_cm: float = 10) -> None:
@@ -158,10 +175,9 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             paragraph = cell.paragraphs[0]
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.space_after = Pt(0)
-            path = photo_path(settings, photo)
-            width, height = fitted_size(path, width_cm - 2 if len(pair) == 1 else width_cm / 2 - 0.8,
-                                        single_height_cm if len(photos) == 1 else 5.8)
-            paragraph.add_run().add_picture(str(path), width=Cm(width), height=Cm(height))
+            insert_photo(paragraph, photo, settings,
+                         width_cm - 2 if len(pair) == 1 else width_cm / 2 - 0.8,
+                         single_height_cm if len(photos) == 1 else 5.8)
         captions = [photo.caption.strip() for photo in pair if photo.caption and photo.caption.strip()]
         if captions:
             caption_cell = table.add_row().cells[0].merge(table.rows[-1].cells[1])
@@ -274,10 +290,9 @@ def issue_block(document, issue: Issue, photos: list[InspectionPhoto], settings:
                     paragraph = cell.paragraphs[0]
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     paragraph.paragraph_format.space_after = Pt(0)
-                    path = photo_path(settings, photo)
-                    width, height = fitted_size(path, max_width_cm=15.8 if len(chunk) == 1 else 7.81,
-                                                max_height_cm=max_h)
-                    paragraph.add_run().add_picture(str(path), width=Cm(width), height=Cm(height))
+                    insert_photo(paragraph, photo, settings,
+                                 max_width_cm=15.8 if len(chunk) == 1 else 7.81,
+                                 max_height_cm=max_h)
                 captions = [photo.caption.strip() for photo in pair if photo.caption and photo.caption.strip()]
                 if captions:
                     caption_row = grid.add_row()

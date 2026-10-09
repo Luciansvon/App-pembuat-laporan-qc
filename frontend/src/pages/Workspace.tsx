@@ -169,12 +169,40 @@ function Issues({ inspection, defects, run, capture, onPendingChange }: { inspec
 
 function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action }) {
   const [review, setReview] = useState<Review | null>(null)
+  const [validationBusy, setValidationBusy] = useState(true)
   const [reportBusy, setReportBusy] = useState(false)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [preview, setPreview] = useState<ReportPreview | null>(null)
   const [selectedPage, setSelectedPage] = useState(0)
   const [message, setMessage] = useState('')
-  useEffect(() => { let active = true; api.validate(inspection.id).then((result) => { if (active) setReview(result) }).catch((cause) => { if (active) setMessage(String(cause)) }); return () => { active = false } }, [inspection.id, inspection.revision])
+  useEffect(() => {
+    let active = true
+    setValidationBusy(true)
+    setReview(null)
+    setPreview(null)
+    setSelectedPage(0)
+    setMessage('Memeriksa inspeksi…')
+    api.validate(inspection.id)
+      .then((result) => { if (active) setReview(result) })
+      .catch((cause) => { if (active) setMessage(`Pemeriksaan gagal: ${String(cause)}. Coba periksa ulang.`) })
+      .finally(() => { if (active) setValidationBusy(false) })
+    return () => { active = false }
+  }, [inspection.id, inspection.revision])
+  async function revalidate() {
+    setValidationBusy(true)
+    setReview(null)
+    setPreview(null)
+    setSelectedPage(0)
+    setMessage('Memeriksa inspeksi…')
+    try {
+      setReview(await api.validate(inspection.id))
+      setMessage('Pemeriksaan selesai.')
+    } catch (cause) {
+      setMessage(`Pemeriksaan gagal: ${String(cause)}. Coba periksa ulang.`)
+    } finally {
+      setValidationBusy(false)
+    }
+  }
   async function showPreview() {
     setPreviewBusy(true)
     setMessage('Merender halaman Word…')
@@ -197,16 +225,16 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
     {review && <><div className="validation-block errors"><strong>ERROR · {review.errors.length}</strong>{review.errors.length ? <ul>{review.errors.map((error) => <li key={error}>{error}</li>)}</ul> : <p>Tidak ada error.</p>}</div><div className="validation-block warnings"><strong>WARNING · {review.warnings.length}</strong>{review.warnings.length ? <ul>{review.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : <p>Tidak ada warning.</p>}</div></>}
     {message && <p role="status">{message}</p>}
     <div className="report-actions">
-      <button type="button" className="small-action" onClick={() => void api.validate(inspection.id).then(setReview)}>Periksa ulang</button>
-      <button type="button" className="small-action" disabled={!ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
-      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : isDesktopView ? 'Dialog simpan DOCX dibuka. Pilih lokasi di Windows.' : 'Unduhan DOCX dimulai.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
+      <button type="button" className="small-action" disabled={validationBusy || previewBusy || reportBusy} onClick={() => void revalidate()}>{validationBusy ? 'Memeriksa…' : 'Periksa ulang'}</button>
+      <button type="button" className="small-action" disabled={validationBusy || reportBusy || !ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
+      <button type="button" className="primary-action" disabled={validationBusy || previewBusy || reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : isDesktopView ? 'Dialog simpan DOCX dibuka. Pilih lokasi di Windows.' : 'Unduhan DOCX dimulai.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
     </div>
     {preview && <section className="report-preview" aria-label="Preview laporan per halaman">
       <div className="report-preview-heading"><strong>Halaman {selectedPage + 1} dari {preview.page_count}</strong><span>Hasil render Microsoft Word</span></div>
       <div className="report-preview-viewer"><button type="button" aria-label="Halaman sebelumnya" disabled={selectedPage === 0} onClick={() => setSelectedPage((value) => value - 1)}>‹</button><img src={preview.pages[selectedPage]} alt={`Preview halaman ${selectedPage + 1} dari ${preview.page_count}`} /><button type="button" aria-label="Halaman berikutnya" disabled={selectedPage === preview.page_count - 1} onClick={() => setSelectedPage((value) => value + 1)}>›</button></div>
       <div className="report-preview-pages">{preview.pages.map((url, index) => <button type="button" key={url} className={selectedPage === index ? 'active' : ''} aria-label={`Lihat halaman ${index + 1}`} aria-current={selectedPage === index ? 'page' : undefined} onClick={() => setSelectedPage(index)}><img src={url} alt="" loading="lazy" /><span>{index + 1}</span></button>)}</div>
     </section>}
-    {inspection.status !== 'COMPLETED' && <button type="button" className="small-action" onClick={() => void run(() => api.patchInspection(inspection.id, { revision: inspection.revision, status: 'COMPLETED' }), 'Inspeksi ditandai selesai.')}>Tandai inspeksi selesai</button>}
+    {inspection.status !== 'COMPLETED' && <button type="button" className="small-action" disabled={validationBusy || previewBusy || reportBusy} onClick={() => void run(() => api.patchInspection(inspection.id, { revision: inspection.revision, status: 'COMPLETED' }), 'Inspeksi ditandai selesai.')}>Tandai inspeksi selesai</button>}
   </div>
 }
 
