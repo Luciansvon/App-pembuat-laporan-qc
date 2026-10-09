@@ -7,7 +7,7 @@ export type Tab = 'overview' | 'photos' | 'measurements' | 'tests' | 'issues' | 
 const sections = ['PRODUCT_VIEW', 'PRODUCT_DETAIL', 'DRAWING', 'DIMENSION', 'MC', 'GLOSS', 'SWATCH', 'ISSUE', 'OTHER']
 const sectionLabel = (section: string) => section.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
 const axes = ['L', 'W', 'D', 'H']
-const isDesktopView = typeof navigator !== 'undefined' && navigator.userAgent.includes('pywebview')
+const isDesktopView = typeof window !== 'undefined' && ('pywebview' in window || navigator.userAgent.includes('pywebview'))
 
 function initialDraft(inspection: Inspection): Record<string, string> {
   const result: Record<string, string> = {
@@ -199,7 +199,7 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
     <div className="report-actions">
       <button type="button" className="small-action" onClick={() => void api.validate(inspection.id).then(setReview)}>Periksa ulang</button>
       <button type="button" className="small-action" disabled={!ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
-      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : 'DOCX diunduh.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
+      <button type="button" className="primary-action" disabled={reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : isDesktopView ? 'Dialog simpan DOCX dibuka. Pilih lokasi di Windows.' : 'Unduhan DOCX dimulai.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
     </div>
     {preview && <section className="report-preview" aria-label="Preview laporan per halaman">
       <div className="report-preview-heading"><strong>Halaman {selectedPage + 1} dari {preview.page_count}</strong><span>Hasil render Microsoft Word</span></div>
