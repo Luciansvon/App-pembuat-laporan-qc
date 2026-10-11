@@ -19,6 +19,9 @@ Rilis Windows x64 dan kandidat Android ARM64. Tanggal: 11 Oktober 2026.
   service worker PWA tidak diaktifkan dalam APK.
 - Build desktop dapat memakai output terpisah di `.artifacts` untuk QC tanpa
   mengganggu aplikasi pengguna. Versi backend/frontend dan APK adalah 0.1.2.
+- Pengemasan APK menghapus ekstensi MarkupSafe host yang opsional, memakai
+  fallback Python resmi, dan menolak library dengan ABI yang tidak sesuai.
+  Library ARM64 di dalam Python bundle juga diperiksa alignment ELF 16 KiB.
 
 ## Validasi dan penerimaan
 
