@@ -226,8 +226,32 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             paragraph_format(caption, 8, True)
 
 
+def dimension_photo_blocks(document, measurements: list[Measurement], photos: list[InspectionPhoto],
+                           settings: Settings, *, width_cm: float = 18, border: bool = True) -> None:
+    for measurement in measurements:
+        pair = sorted((photo for photo in photos if photo.measurement_id == measurement.id),
+                      key=lambda photo: (photo.dimension_slot or 0, photo.id))
+        if len(pair) != 2 or {photo.dimension_slot for photo in pair} != {1, 2}:
+            raise ReportAssetUnavailable(f"Dimension {measurement.label} requires exactly 2 linked photos")
+        photo_grid(document, pair, settings, width_cm=width_cm, border=border)
+        table = document.tables[-1]
+        label_row = table.add_row()
+        label_cell = label_row.cells[0].merge(label_row.cells[1])
+        label_cell.text = measurement.label
+        if any(value is not None for value in (measurement.value, measurement.value_min, measurement.value_max)):
+            label_cell.text += " — " + value_text(measurement)
+        paragraph_format(label_cell.paragraphs[0], 9, True)
+        label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        table._tbl.insert(table._tbl.index(table.rows[0]._tr), label_row._tr)
+        for index, row in enumerate(table.rows):
+            row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    paragraph.paragraph_format.keep_with_next = index < len(table.rows) - 1
+
+
 def combined_section_block(document, sections: list[str], photos_by_section: dict[str, list[InspectionPhoto]],
-                           settings: Settings) -> None:
+                           settings: Settings, dimensions: list[Measurement]) -> None:
     outer = document.add_table(rows=1, cols=1)
     outer.style = "Table Grid"
     outer.autofit = False
@@ -243,8 +267,11 @@ def combined_section_block(document, sections: list[str], photos_by_section: dic
         paragraph.paragraph_format.space_after = Pt(6)
         paragraph.add_run(SECTION_TITLES.get(section, section)).bold = True
         paragraph_format(paragraph, 9, True)
-        photo_grid(cell, photos_by_section[section], settings, width_cm=17.2,
-                   border=False, single_height_cm=8.5)
+        if section == "DIMENSION":
+            dimension_photo_blocks(cell, dimensions, photos_by_section[section], settings, width_cm=17.2, border=False)
+        else:
+            photo_grid(cell, photos_by_section[section], settings, width_cm=17.2,
+                       border=False, single_height_cm=8.5)
 
 
 def value_text(measurement: Measurement) -> str:
@@ -400,6 +427,7 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
         .order_by(InspectionPhoto.sort_order, InspectionPhoto.id)).all()
     measurements = session.exec(select(Measurement).where(Measurement.inspection_id == inspection.id)
         .order_by(Measurement.sort_order, Measurement.id)).all()
+    dimensions = [measurement for measurement in measurements if measurement.category == "DIMENSION"]
     issues = session.exec(select(Issue).where(Issue.inspection_id == inspection.id)
         .order_by(Issue.sort_order, Issue.id)).all()
     sections_photos = {section: [photo for photo in photos if photo.section == section and photo.issue_id is None]
@@ -415,8 +443,12 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
         block = combined.get(section)
         if block and all(0 < len(sections_photos.get(name, [])) <= limit for name, limit
                          in zip(block["sections"], block["max_counts"], strict=True)):
-            combined_section_block(document, block["sections"], sections_photos, settings)
+            combined_section_block(document, block["sections"], sections_photos, settings, dimensions)
             consumed.update(block["sections"])
+            continue
+        if section == "DIMENSION":
+            heading(document, SECTION_TITLES[section])
+            dimension_photo_blocks(document, dimensions, section_photos, settings)
             continue
         for start in range(0, len(section_photos), config["max_photos_per_page"]):
             heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()))

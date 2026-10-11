@@ -21,6 +21,12 @@ jika ingin mempertahankan database dan foto di HP.
 
 ## Foto adaptif
 
+Source v0.1.3 menambahkan **dua foto per ukuran dimension**: Length, Width,
+Depth, Height, dan label lain masing-masing mempunyai pasangan sendiri.
+Tambahkan ukuran di Photos atau Measurement, lalu isi kedua slot fotonya.
+Foto dimension lama tetap ada dan perlu dipilih ukurannya; DOCX/preview ditahan
+jika pasangan belum lengkap. Paket publik pada tautan di atas masih v0.1.2-beta.1.
+
 Foto menyesuaikan jumlah dan ruang sel tabel, tetap proporsional tanpa crop.
 Susunan 1–6 foto: **1**, **2**, **2+1**, **2+2**, **2+2+1**, **2+2+2**.
 Foto terakhir pada jumlah ganjil berada di sel penuh terpusat. Batas tinggi

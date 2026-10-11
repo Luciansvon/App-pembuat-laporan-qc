@@ -17,7 +17,8 @@ export interface Issue {
 }
 export interface Photo {
   id: string; inspection_id: string; section: string; file_path: string;
-  caption: string | null; sort_order: number; issue_id: string | null
+  caption: string | null; sort_order: number; issue_id: string | null;
+  measurement_id: string | null; dimension_slot: 1 | 2 | null
 }
 export interface Inspection {
   id: string; inspection_number: string; customer_id: string; product_id: string;

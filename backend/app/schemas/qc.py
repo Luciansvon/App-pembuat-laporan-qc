@@ -161,6 +161,7 @@ class PhotoPatch(StrictModel):
     caption: str | None = None
     sort_order: int | None = Field(default=None, ge=0)
     issue_id: str | None = None
+    measurement_id: str | None = None
     rotate_degrees: Literal[90, 180, 270] | None = None
 
 

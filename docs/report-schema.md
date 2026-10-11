@@ -35,7 +35,18 @@ rasio asli tanpa crop. Pada issue, batas tinggi dibagi berdasarkan jumlah
 baris foto agar caption dan CAUSE/REPAIR/CAP tetap mendapat ruang. Tabel
 nested tetap memiliki paragraf pemisah supaya gambar tidak menutup garis ISSUE.
 
-Konfigurasi `combined_blocks` dapat menempatkan satu Drawing dan hingga dua
+Setiap pengukuran DIMENSION (misalnya Length, Width, Depth, Height, atau label
+custom) memiliki tepat dua foto yang ditautkan ke ID pengukuran tersebut.
+Laporan menampilkan satu blok berlabel per ukuran, dengan kedua foto berdampingan.
+Foto tidak dipasangkan berdasarkan urutan upload atau tebakan caption. Draft
+boleh belum lengkap; validasi, DOCX, dan preview menolak ukuran dengan jumlah
+foto selain dua. Slot database hanya 1/2 dan unik per pengukuran.
+
+Migrasi mempertahankan foto dimension lama tanpa menebak ukurannya. QC memilih
+ukuran di UI sebelum foto lama dapat masuk laporan. Menghapus ukuran melalui
+konfirmasi mengembalikan fotonya ke Product View, bukan menghapus berkas foto.
+
+Konfigurasi `combined_blocks` dapat menempatkan satu Drawing dan satu pasangan
 foto Dimension dalam satu bingkai. Section lain mengikuti alur halaman Word,
 tanpa page break paksa per section. Halaman Word yang sudah dirender menjadi
 preview per halaman sehingga QC dapat melihat pemisahan yang sebenarnya.

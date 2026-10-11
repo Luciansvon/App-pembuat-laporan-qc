@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Column, JSON, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Index, JSON, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -108,6 +108,12 @@ class Issue(SQLModel, table=True):
 
 class InspectionPhoto(SQLModel, table=True):
     __tablename__ = "photos"
+    __table_args__ = (
+        Index("uq_photos_dimension_slot", "measurement_id", "dimension_slot", unique=True),
+        CheckConstraint("(measurement_id IS NULL AND dimension_slot IS NULL) OR "
+                        "(measurement_id IS NOT NULL AND dimension_slot IS NOT NULL AND dimension_slot IN (1, 2))",
+                        name="ck_photos_dimension_slot"),
+    )
     id: str = Field(default_factory=new_id, primary_key=True)
     inspection_id: str = Field(foreign_key="inspections.id", index=True)
     section: str
@@ -115,6 +121,8 @@ class InspectionPhoto(SQLModel, table=True):
     caption: str | None = None
     sort_order: int = 0
     issue_id: str | None = Field(default=None, foreign_key="issues.id")
+    measurement_id: str | None = Field(default=None, foreign_key="measurements.id", index=True)
+    dimension_slot: int | None = None
     created_at: datetime = Field(default_factory=utc_now)
 
 

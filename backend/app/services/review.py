@@ -22,9 +22,14 @@ def inspect_report(session: Session, inspection: Inspection, template_config: di
     if not all((inspection.customer_name, inspection.product_name, inspection.po, inspection.qc_name, inspection.quantity)):
         errors.append("Required report header is incomplete")
     issue_ids = {issue.id for issue in issues}
+    dimension_ids = {item.id for item in measurements if item.category == "DIMENSION"}
     renderable_sections = set(template_config.get("sections", ()))
     for photo in photos:
         photo_label = f"Photo {photo.id[:8]} ({photo.section})"
+        if photo.section == "DIMENSION" and (photo.measurement_id not in dimension_ids or photo.dimension_slot not in (1, 2)):
+            errors.append(f"{photo_label} must be linked to a dimension before report generation")
+        elif photo.measurement_id is not None and (photo.section != "DIMENSION" or photo.issue_id is not None):
+            errors.append(f"{photo_label} has an invalid dimension link")
         if photo.issue_id is not None and photo.issue_id not in issue_ids:
             errors.append(f"{photo_label} is linked to an unavailable issue")
         elif photo.section == "ISSUE" and photo.issue_id is None:
@@ -50,6 +55,11 @@ def inspect_report(session: Session, inspection: Inspection, template_config: di
             errors.append(f"Issue {issue.defect_type} has no photo")
         if not all((issue.cause, issue.repair, issue.cap)):
             warnings.append(f"Issue {issue.defect_type} has incomplete Cause/Repair/CAP")
+    for measurement in measurements:
+        if measurement.category == "DIMENSION":
+            count = sum(photo.measurement_id == measurement.id and photo.section == "DIMENSION" for photo in photos)
+            if count != 2:
+                errors.append(f"Dimension {measurement.label} requires exactly 2 photos (currently {count})")
     return {"errors": errors, "warnings": warnings,
             "photo_counts": {section: sum(photo.section == section for photo in photos) for section in sorted({photo.section for photo in photos})},
             "measurement_count": len(measurements), "issue_count": len(issues)}

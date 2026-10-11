@@ -48,10 +48,12 @@ export const api = {
   createDefect: (name: string) => request<Defect>('/defects', 'POST', { name }),
   validate: (id: string) => request<Review>(`/inspections/${id}/validate`, 'POST'),
   previewReport: (id: string) => request<ReportPreview>(`/inspections/${id}/report/preview`, 'POST'),
-  async upload(id: string, section: string, files: FileList | File[], issueId?: string): Promise<Photo[]> {
+  async upload(id: string, section: string, files: FileList | File[], issueId?: string, measurementId?: string, dimensionSlot?: 1 | 2): Promise<Photo[]> {
     const form = new FormData()
     form.append('section', section)
     if (issueId) form.append('issue_id', issueId)
+    if (measurementId) form.append('measurement_id', measurementId)
+    if (dimensionSlot) form.append('dimension_slot', String(dimensionSlot))
     for (const file of Array.from(files)) form.append('files', file)
     const response = await fetch(`/api/inspections/${id}/photos`, { method: 'POST', body: form })
     if (!response.ok) {

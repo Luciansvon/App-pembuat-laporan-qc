@@ -58,7 +58,7 @@ jobs:
           PYTHONPATH=.artifacts/p4a python -m pythonforandroid.toolchain apk \
             --private=.artifacts/android-stage \
             --package=com.luciansvon.inspectra \
-            --name=Inspectra --version=0.1.2 --numeric-version=1024102 --dist-name=inspectra \
+            --name=Inspectra --version=0.1.3 --numeric-version=1034101 --dist-name=inspectra \
             --bootstrap=webview --requirements="$requirements" --port=5000 \
             --local-recipes=android/p4a-recipes \
             --enable-androidx --depend=androidx.core:core:1.15.0 \
@@ -70,13 +70,13 @@ jobs:
       - name: Finalize and validate Android native libraries
         run: |
           set -euo pipefail
-          python tools/finalize_android.py --input inspectra-debug-0.1.2.apk \
+          python tools/finalize_android.py --input inspectra-debug-0.1.3.apk \
             --output .artifacts/android-unsigned.apk --abi '${{ inputs.arch }}' \
             | tee .artifacts/android-package.json
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 \
-            .artifacts/android-unsigned.apk .artifacts/Inspectra-0.1.2-${{ inputs.arch }}.apk
+            .artifacts/android-unsigned.apk .artifacts/Inspectra-0.1.3-${{ inputs.arch }}.apk
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 \
-            .artifacts/Inspectra-0.1.2-${{ inputs.arch }}.apk
+            .artifacts/Inspectra-0.1.3-${{ inputs.arch }}.apk
       - name: Preserve native distribution for local Java QA
         if: ${{ always() }}
         run: |
@@ -91,7 +91,7 @@ jobs:
         with:
           name: inspectra-android-${{ inputs.arch }}-${{ github.run_id }}
           path: |
-            .artifacts/Inspectra-0.1.2-*.apk
+            .artifacts/Inspectra-0.1.3-*.apk
             .artifacts/android-package.json
             .artifacts/android-build.log
             .artifacts/android-native-dist.tar.gz
