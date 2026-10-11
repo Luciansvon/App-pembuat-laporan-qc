@@ -126,9 +126,11 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .dimension-add-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .dimension-photo-slots, .dimension-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .dimension-values { margin-bottom: 14px; }
-.dimension-photo-slot { min-width: 0; display: grid; align-content: start; gap: 9px; }
-.dimension-photo-slot .photo-thumb { width: 100%; height: 180px; }
+.dimension-photo-slot { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
+.dimension-photo-slot .photo-thumb { min-width: 0; width: 100%; height: 180px; }
 .dimension-photo-slot .photo-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.dimension-values label, .dimension-photo-slot label { min-width: 0; display: grid; gap: 6px; font-size: 12px; }
+.dimension-values input, .dimension-photo-slot input { min-width: 0; width: 100%; padding: 9px 8px; border: 1px solid #bfcdbf; background: white; color: #244b3e; font: inherit; }
 .dimension-empty-slot { min-height: 180px; display: grid; place-content: center; gap: 9px; border: 1px dashed #879d84; background: #edf2e8; color: #244b3e; font-size: 28px; cursor: pointer; }
 .dimension-empty-slot span { font-size: 12px; }
 .reading-entry input { max-width: 220px; }
