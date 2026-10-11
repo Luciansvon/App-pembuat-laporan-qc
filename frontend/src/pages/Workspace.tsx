@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../services/api'
+import { useAutosave } from '../hooks/useAutosave'
 import type { Defect, Inspection, Issue, Measurement, Photo, ReportPreview, Review } from '../types/qc'
 
 type Action = (task: () => Promise<unknown>, message?: string) => Promise<boolean>
@@ -25,15 +26,13 @@ function initialDraft(inspection: Inspection): Record<string, string> {
 }
 
 function Overview({ inspection, run, onPendingChange }: { inspection: Inspection; run: Action; onPendingChange: (pending: boolean) => void }) {
-  const [draft, setDraft] = useState(() => initialDraft(inspection))
-  const [dirty, setDirty] = useState(false)
-  const [saveFailed, setSaveFailed] = useState(false)
-  useEffect(() => { setDraft(initialDraft(inspection)); setDirty(false); setSaveFailed(false) }, [inspection.id])
-  useEffect(() => {
-    if (!dirty || saveFailed) return
-    const timer = window.setTimeout(() => {
-      const product_dimensions = Object.fromEntries(axes.filter((axis) => draft[`dim_${axis}`] !== '').map((axis) => [axis, Number(draft[`dim_${axis}`])]))
-      const box_dimensions = Object.fromEntries(axes.filter((axis) => draft[`box_${axis}`] !== '').map((axis) => [axis, Number(draft[`box_${axis}`])]))
+  const { draft, saveFailed, saving, update: updateDraft, discard, retry } = useAutosave(initialDraft(inspection), async (draft) => {
+      const dimensions = (source: Record<string, number>, prefix: string) => ({
+        ...Object.fromEntries(Object.entries(source).filter(([axis]) => !axes.includes(axis))),
+        ...Object.fromEntries(axes.filter((axis) => draft[`${prefix}_${axis}`] !== '').map((axis) => [axis, Number(draft[`${prefix}_${axis}`])])),
+      })
+      const product_dimensions = dimensions(inspection.product_dimensions, 'dim')
+      const box_dimensions = dimensions(inspection.box_dimensions, 'box')
       const patch = {
         revision: inspection.revision, po: draft.po, inspection_type: draft.inspection_type,
         date: draft.date, location: draft.location || null, qc_name: draft.qc_name,
@@ -42,12 +41,9 @@ function Overview({ inspection, run, onPendingChange }: { inspection: Inspection
         product_dimensions, box_dimensions, status: draft.status,
         conclusion: draft.conclusion || null, communication_status: draft.communication_status || null,
       }
-      setDirty(false)
-      void run(() => api.patchInspection(inspection.id, patch), 'Perubahan inspeksi tersimpan otomatis.').then((saved) => { if (!saved) { setDirty(true); setSaveFailed(true); onPendingChange(true) } })
-    }, 850)
-    return () => window.clearTimeout(timer)
-  }, [draft, dirty, inspection.id, inspection.revision, run, saveFailed, onPendingChange])
-  function update(key: string, value: string) { setDraft((current) => ({ ...current, [key]: value })); setDirty(true); setSaveFailed(false); onPendingChange(true) }
+      return run(() => api.patchInspection(inspection.id, patch), 'Perubahan inspeksi tersimpan otomatis.')
+  }, onPendingChange)
+  function update(key: string, value: string) { updateDraft({ ...draft, [key]: value }) }
   return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">01 / OVERVIEW</span><h2>{inspection.product_name}</h2></div><p>{inspection.customer_name} · {inspection.inspection_number}</p></div>
     <div className="summary-strip"><span>PO <strong>{inspection.po}</strong></span><span>QTY <strong>{inspection.quantity}</strong></span><span>AQL <strong>{inspection.aql || '—'}</strong></span><span>STATUS <strong>{inspection.status}</strong></span></div>
     <p className="field-help">Perubahan form ini tersimpan otomatis setelah berhenti mengetik. Angka di header adalah standar produk; hasil pengukuran di tab Measurement.</p>
@@ -65,7 +61,7 @@ function Overview({ inspection, run, onPendingChange }: { inspection: Inspection
     <h3 className="subheading">DIM(mm) — standar header</h3><div className="axis-fields">{axes.map((axis) => <label key={axis}>{axis}<input type="number" step="any" value={draft[`dim_${axis}`] || ''} onChange={(event) => update(`dim_${axis}`, event.target.value)} /></label>)}</div>
     <h3 className="subheading">BOX(mm) — opsional</h3><div className="axis-fields">{axes.map((axis) => <label key={axis}>{axis}<input type="number" step="any" value={draft[`box_${axis}`] || ''} onChange={(event) => update(`box_${axis}`, event.target.value)} /></label>)}</div>
     <h3 className="subheading">Kesimpulan QC</h3><div className="form-grid"><label className="span-2">Conclusion<textarea value={draft.conclusion} onChange={(event) => update('conclusion', event.target.value)} placeholder="Isi hanya hasil yang sudah diperiksa QC." /></label><label className="span-2">Komunikasi / perbaikan<textarea value={draft.communication_status} onChange={(event) => update('communication_status', event.target.value)} placeholder="Contoh: sudah dikomunikasikan; jangan tandai repaired jika belum." /></label></div>
-    {saveFailed && <div className="save-recovery" role="alert">Penyimpanan gagal. Perbaiki isian lalu coba lagi.<button type="button" onClick={() => setSaveFailed(false)}>Coba simpan</button><button type="button" onClick={() => { setDraft(initialDraft(inspection)); setDirty(false); setSaveFailed(false); onPendingChange(false) }}>Batalkan perubahan</button></div>}
+    {saveFailed && <div className="save-recovery" role="alert">Penyimpanan gagal. Perbaiki isian lalu coba lagi.<button type="button" disabled={saving} onClick={retry}>Coba simpan</button><button type="button" disabled={saving} onClick={() => discard(initialDraft(inspection))}>Batalkan perubahan</button></div>}
   </div>
 }
 
@@ -144,27 +140,19 @@ function Measurements({ inspection, run, tests }: { inspection: Inspection; run:
 }
 
 function IssueCard({ issue, defects, photos, run, capture, onPendingChange }: { issue: Issue; defects: Defect[]; photos: Photo[]; run: Action; capture: (id: string) => void; onPendingChange: (pending: boolean) => void }) {
-  const [draft, setDraft] = useState({ defect_type: issue.defect_type, quantity: issue.quantity?.toString() || '', description: issue.description || '', cause: issue.cause || '', repair: issue.repair || '', cap: issue.cap || '', status: issue.status })
-  const [dirty, setDirty] = useState(false)
-  const [saveFailed, setSaveFailed] = useState(false)
+  const initial = { defect_type: issue.defect_type, quantity: issue.quantity?.toString() || '', description: issue.description || '', cause: issue.cause || '', repair: issue.repair || '', cap: issue.cap || '', status: issue.status }
+  const { draft, dirty, saving, saveFailed, update: updateDraft, discard, retry } = useAutosave(initial,
+    (draft) => run(() => api.patchIssue(issue.id, { ...draft, quantity: draft.quantity ? Number(draft.quantity) : null }), 'Issue tersimpan otomatis.'), onPendingChange)
   const preset = defects.find((item) => item.name.toLowerCase() === draft.defect_type.toLowerCase() || item.aliases.some((alias) => alias.toLowerCase() === draft.defect_type.toLowerCase()))
-  useEffect(() => {
-    if (!dirty || saveFailed) return
-    const timer = window.setTimeout(() => {
-      setDirty(false)
-      void run(() => api.patchIssue(issue.id, { ...draft, quantity: draft.quantity ? Number(draft.quantity) : null }), 'Issue tersimpan otomatis.').then((saved) => { if (!saved) { setDirty(true); setSaveFailed(true); onPendingChange(true) } })
-    }, 850)
-    return () => window.clearTimeout(timer)
-  }, [dirty, draft, issue.id, run, saveFailed, onPendingChange])
-  function update(key: keyof typeof draft, value: string) { setDraft((current) => ({ ...current, [key]: value })); setDirty(true); setSaveFailed(false); onPendingChange(true) }
+  function update(key: keyof typeof draft, value: string) { updateDraft({ ...draft, [key]: value }) }
   const count = photos.filter((photo) => photo.issue_id === issue.id).length
-  return <article className="issue-card"><div className="record-head"><div><span className="section-kicker">ISSUE · {count} FOTO</span><h3>{issue.defect_type}</h3></div><button type="button" className="small-action" disabled={dirty} onClick={() => capture(issue.id)}>+ Foto issue</button></div><div className="form-grid"><label>Defect<input value={draft.defect_type} onChange={(event) => update('defect_type', event.target.value)} /></label><label>Jumlah pcs<input type="number" min="1" value={draft.quantity} onChange={(event) => update('quantity', event.target.value)} /></label><label>Status<select value={draft.status} onChange={(event) => update('status', event.target.value)}><option>OPEN</option><option>REPAIRED</option><option>ACCEPTED</option></select></label><label className="span-2">Deskripsi<textarea value={draft.description} onChange={(event) => update('description', event.target.value)} /></label>{(['cause', 'repair', 'cap'] as const).map((field) => <div className="issue-field span-2" key={field}><label>{field.toUpperCase()}<textarea value={draft[field]} onChange={(event) => update(field, event.target.value)} placeholder={`Isi ${field} berdasarkan pemeriksaan QC`} /></label>{preset && <div className="preset-suggestion"><span>PRESET REFERENSI · PERLU QC SETUJUI</span><p>{(field === 'cause' ? preset.default_causes : field === 'repair' ? preset.default_repairs : preset.default_cap)[0] || 'Tidak ada preset'}</p><button type="button" onClick={() => update(field, (field === 'cause' ? preset.default_causes : field === 'repair' ? preset.default_repairs : preset.default_cap)[0] || '')}>Gunakan teks ini</button></div>}</div>)}</div>{saveFailed && <div className="save-recovery" role="alert">Penyimpanan issue gagal. Perbaiki isian lalu coba lagi.<button type="button" onClick={() => setSaveFailed(false)}>Coba simpan</button><button type="button" onClick={() => { setDraft({ defect_type: issue.defect_type, quantity: issue.quantity?.toString() || '', description: issue.description || '', cause: issue.cause || '', repair: issue.repair || '', cap: issue.cap || '', status: issue.status }); setDirty(false); setSaveFailed(false); onPendingChange(false) }}>Batalkan perubahan</button></div>}<button type="button" className="danger-text" disabled={dirty} onClick={() => { if (window.confirm(`Hapus issue ${issue.defect_type}? Foto akan lepas dari issue ini.`)) void run(() => api.deleteIssue(issue.id), 'Issue dihapus.') }}>Hapus issue</button></article>
+  return <article className="issue-card"><div className="record-head"><div><span className="section-kicker">ISSUE · {count} FOTO</span><h3>{issue.defect_type}</h3></div><button type="button" className="small-action" disabled={dirty} onClick={() => capture(issue.id)}>+ Foto issue</button></div><div className="form-grid"><label>Defect<input value={draft.defect_type} onChange={(event) => update('defect_type', event.target.value)} /></label><label>Jumlah pcs<input type="number" min="1" value={draft.quantity} onChange={(event) => update('quantity', event.target.value)} /></label><label>Status<select value={draft.status} onChange={(event) => update('status', event.target.value)}><option>OPEN</option><option>REPAIRED</option><option>ACCEPTED</option></select></label><label className="span-2">Deskripsi<textarea value={draft.description} onChange={(event) => update('description', event.target.value)} /></label>{(['cause', 'repair', 'cap'] as const).map((field) => <div className="issue-field span-2" key={field}><label>{field.toUpperCase()}<textarea value={draft[field]} onChange={(event) => update(field, event.target.value)} placeholder={`Isi ${field} berdasarkan pemeriksaan QC`} /></label>{preset && <div className="preset-suggestion"><span>PRESET REFERENSI · PERLU QC SETUJUI</span><p>{(field === 'cause' ? preset.default_causes : field === 'repair' ? preset.default_repairs : preset.default_cap)[0] || 'Tidak ada preset'}</p><button type="button" onClick={() => update(field, (field === 'cause' ? preset.default_causes : field === 'repair' ? preset.default_repairs : preset.default_cap)[0] || '')}>Gunakan teks ini</button></div>}</div>)}</div>{saveFailed && <div className="save-recovery" role="alert">Penyimpanan issue gagal. Perbaiki isian lalu coba lagi.<button type="button" disabled={saving} onClick={retry}>Coba simpan</button><button type="button" disabled={saving} onClick={() => discard(initial)}>Batalkan perubahan</button></div>}<button type="button" className="danger-text" disabled={dirty} onClick={() => { if (window.confirm(`Hapus issue ${issue.defect_type}? Foto akan lepas dari issue ini.`)) void run(() => api.deleteIssue(issue.id), 'Issue dihapus.') }}>Hapus issue</button></article>
 }
 
-function Issues({ inspection, defects, run, capture, onPendingChange }: { inspection: Inspection; defects: Defect[]; run: Action; capture: (id: string) => void; onPendingChange: (pending: boolean) => void }) {
+function Issues({ inspection, defects, run, capture, onPendingChange }: { inspection: Inspection; defects: Defect[]; run: Action; capture: (id: string) => void; onPendingChange: (scope: string, pending: boolean) => void }) {
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('')
-  return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">05 / ISSUES</span><h2>Temuan QC</h2></div><p>Preset hanya saran teks. QC tetap memeriksa Cause, Repair dan CAP.</p></div><form className="new-issue" onSubmit={(event) => { event.preventDefault(); void run(() => api.issues(inspection.id, { defect_type: name, quantity: quantity ? Number(quantity) : null, sort_order: inspection.issues.length }), 'Issue baru tersimpan.').then((saved) => { if (saved) { setName(''); setQuantity('') } }) }}><label>Jenis defect<input list="defect-options" value={name} onChange={(event) => setName(event.target.value)} required placeholder="Gap, Scratch, atau defect baru" /><datalist id="defect-options">{defects.map((defect) => <option key={defect.id} value={defect.name} />)}</datalist></label><label>Jumlah pcs<input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Opsional" /></label><button type="submit" className="primary-action" disabled={!name.trim()}>+ Buat issue</button></form><div className="record-list">{inspection.issues.map((issue) => <IssueCard key={issue.id} issue={issue} defects={defects} photos={inspection.photos} run={run} capture={capture} onPendingChange={onPendingChange} />)}{inspection.issues.length === 0 && <p className="empty-inline">Belum ada issue. Tambahkan bila ditemukan; tidak perlu membuat issue fiktif.</p>}</div></div>
+  return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">05 / ISSUES</span><h2>Temuan QC</h2></div><p>Preset hanya saran teks. QC tetap memeriksa Cause, Repair dan CAP.</p></div><form className="new-issue" onSubmit={(event) => { event.preventDefault(); void run(() => api.issues(inspection.id, { defect_type: name, quantity: quantity ? Number(quantity) : null, sort_order: inspection.issues.length }), 'Issue baru tersimpan.').then((saved) => { if (saved) { setName(''); setQuantity('') } }) }}><label>Jenis defect<input list="defect-options" value={name} onChange={(event) => setName(event.target.value)} required placeholder="Gap, Scratch, atau defect baru" /><datalist id="defect-options">{defects.map((defect) => <option key={defect.id} value={defect.name} />)}</datalist></label><label>Jumlah pcs<input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Opsional" /></label><button type="submit" className="primary-action" disabled={!name.trim()}>+ Buat issue</button></form><div className="record-list">{inspection.issues.map((issue) => <IssueCard key={issue.id} issue={issue} defects={defects} photos={inspection.photos} run={run} capture={capture} onPendingChange={(pending) => onPendingChange(issue.id, pending)} />)}{inspection.issues.length === 0 && <p className="empty-inline">Belum ada issue. Tambahkan bila ditemukan; tidak perlu membuat issue fiktif.</p>}</div></div>
 }
 
 function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action }) {
@@ -241,13 +229,14 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
 export default function Workspace({ inspection, defects, run, refresh, onDelete, initialTab = 'overview', onPendingChange, busy }: {
   inspection: Inspection; defects: Defect[]; run: Action;
   refresh: () => Promise<void>; onDelete: () => Promise<void>; initialTab?: Tab;
-  onPendingChange: (pending: boolean) => void; busy: boolean
+  onPendingChange: (scope: string, pending: boolean) => void; busy: boolean
 }) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const [captureIssue, setCaptureIssue] = useState<string | null>(null)
+  const overviewPending = useCallback((pending: boolean) => onPendingChange('overview', pending), [onPendingChange])
   const tabs: { id: Tab; label: string }[] = [{ id: 'overview', label: 'Overview' }, { id: 'photos', label: 'Photos' }, { id: 'measurements', label: 'Measurement' }, { id: 'tests', label: 'Tests' }, { id: 'issues', label: 'Issues' }, { id: 'review', label: 'Review & Report' }]
   return <section className="workspace"><div className="workspace-tabs" role="tablist" aria-label="Bagian inspeksi">{tabs.map((item, index) => <button type="button" key={item.id} role="tab" aria-selected={tab === item.id} className={tab === item.id ? 'active' : ''} disabled={busy} onClick={() => setTab(item.id)}><span className="step-number">{index + 1}</span>{item.label}</button>)}</div>
-    {tab === 'overview' && <Overview inspection={inspection} run={run} onPendingChange={onPendingChange} />}
+    {tab === 'overview' && <Overview inspection={inspection} run={run} onPendingChange={overviewPending} />}
     {tab === 'photos' && <Photos inspection={inspection} run={run} captureIssue={captureIssue} refresh={refresh} goIssues={() => setTab('issues')} />}
     {tab === 'measurements' && <Measurements inspection={inspection} run={run} tests={false} />}
     {tab === 'tests' && <Measurements inspection={inspection} run={run} tests />}

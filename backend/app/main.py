@@ -8,8 +8,10 @@ from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlmodel import Session
@@ -53,7 +55,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             engine.dispose()
 
-    application = FastAPI(title="Inspectra", version="0.1.0", lifespan=lifespan)
+    application = FastAPI(title="Inspectra", version="0.1.1", lifespan=lifespan)
+
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Raw input may contain NaN/Infinity or private inspection data. Only
+        # return the field and validation message, both safe to encode as JSON.
+        errors = [{key: error[key] for key in ("type", "loc", "msg") if key in error}
+                  for error in exc.errors()]
+        return JSONResponse(status_code=422, content={"detail": errors})
+
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(config.allowed_origins),

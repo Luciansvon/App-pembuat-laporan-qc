@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import text
+from sqlalchemy import Integer, cast, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
@@ -180,10 +180,10 @@ def create_inspection(data: InspectionIn, session: Session = Depends(db)) -> Ins
     # SQLite write lock makes the daily sequence atomic for this local server.
     session.exec(text("BEGIN IMMEDIATE"))
     prefix = data.date.strftime("QC-%Y%m%d-")
-    latest = session.exec(select(Inspection.inspection_number)
-        .where(Inspection.inspection_number.like(prefix + "%"))
-        .order_by(Inspection.inspection_number.desc())).first()
-    next_number = int(latest.rsplit("-", 1)[-1]) + 1 if latest else 1
+    suffix = cast(func.substr(Inspection.inspection_number, len(prefix) + 1), Integer)
+    latest = session.exec(select(func.max(suffix))
+        .where(Inspection.inspection_number.like(prefix + "%"))).one()
+    next_number = (latest or 0) + 1
     payload = data.model_dump()
     payload.pop("product_id")
     if payload["product_dimensions"] is None:
@@ -255,6 +255,7 @@ def patch_measurement(item_id: str, data: MeasurementPatch, session: Session = D
         if value is None and key in {"category", "label", "sort_order"}:
             raise HTTPException(status_code=422, detail=f"{key} cannot be empty")
         setattr(item, key, value)
+    update_reading_range(session, item)
     if item.value_min is not None and item.value_max is not None and item.value_min > item.value_max:
         raise HTTPException(status_code=422, detail="value_min exceeds value_max")
     item.result = measurement_result(item)

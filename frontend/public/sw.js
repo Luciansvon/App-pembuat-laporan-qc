@@ -1,4 +1,4 @@
-const CACHE = 'qc-report-shell-v6'
+const CACHE = 'qc-report-shell-v7'
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/fonts/Manrope-Variable.ttf']
 
 self.addEventListener('install', (event) => {

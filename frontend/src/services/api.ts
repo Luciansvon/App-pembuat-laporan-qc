@@ -1,4 +1,5 @@
 import type { Customer, Defect, Inspection, Issue, Measurement, Photo, Product, ReportPreview, Review, TestReading } from '../types/qc'
+import { errorMessage } from './errorMessage'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -15,8 +16,7 @@ async function request<T>(path: string, method = 'GET', data?: unknown): Promise
   if (!response.ok) {
     let detail = `HTTP ${response.status}`
     try {
-      const body: { detail?: string | { errors?: string[] } } = await response.json()
-      detail = typeof body.detail === 'string' ? body.detail : body.detail?.errors?.join('; ') || detail
+      detail = errorMessage(await response.json(), response.status)
     } catch { /* HTTP detail may not be JSON */ }
     throw new ApiError(response.status, detail)
   }
@@ -53,7 +53,11 @@ export const api = {
     if (issueId) form.append('issue_id', issueId)
     for (const file of Array.from(files)) form.append('files', file)
     const response = await fetch(`/api/inspections/${id}/photos`, { method: 'POST', body: form })
-    if (!response.ok) throw new ApiError(response.status, `Upload gagal: HTTP ${response.status}`)
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`
+      try { detail = errorMessage(await response.json(), response.status) } catch { /* Non-JSON server error */ }
+      throw new ApiError(response.status, `Upload gagal: ${detail}`)
+    }
     return response.json() as Promise<Photo[]>
   },
   async downloadReport(id: string): Promise<'downloaded' | 'save-dialog'> {
@@ -63,8 +67,9 @@ export const api = {
     }
     const response = await fetch(`/api/inspections/${id}/report/docx`, { method: 'POST' })
     if (!response.ok) {
-      const body: { detail?: string | { errors?: string[] } } = await response.json()
-      throw new ApiError(response.status, typeof body.detail === 'string' ? body.detail : body.detail?.errors?.join('; ') || `HTTP ${response.status}`)
+      let detail = `HTTP ${response.status}`
+      try { detail = errorMessage(await response.json(), response.status) } catch { /* Non-JSON server error */ }
+      throw new ApiError(response.status, detail)
     }
     const filename = response.headers.get('content-disposition')?.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i)?.[1] || 'QC-Inspection-Report.docx'
     const url = URL.createObjectURL(await response.blob())

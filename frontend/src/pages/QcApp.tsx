@@ -41,9 +41,25 @@ export default function QcApp() {
   const [connection, setConnection] = useState<'checking' | 'connected' | 'unavailable'>('checking')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [pending, setPending] = useState(false)
+  const [savingCount, setSavingCount] = useState(0)
+  const [pendingScopes, setPendingScopes] = useState<Set<string>>(() => new Set())
+  const saving = savingCount > 0
+  const pending = pendingScopes.size > 0
   const locked = pending || saving
+  const onPendingChange = useCallback((scope: string, pending: boolean) => {
+    setPendingScopes((current) => {
+      const next = new Set(current)
+      if (pending) next.add(scope)
+      else next.delete(scope)
+      return next
+    })
+  }, [])
+  useEffect(() => {
+    if (!locked) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [locked])
 
   const refreshLists = useCallback(async () => {
     const [nextCustomers, nextProducts, nextInspections, nextDefects] = await Promise.all([api.customers(), api.products(), api.inspections(), api.defects()])
@@ -60,15 +76,16 @@ export default function QcApp() {
     return () => { mounted = false }
   }, [])
   const run = useCallback(async (action: () => Promise<unknown>, success = 'Tersimpan.'): Promise<boolean> => {
-    setError(''); setMessage('Menyimpan…'); setSaving(true)
+    setError(''); setMessage('Menyimpan…'); setSavingCount((count) => count + 1)
     try { await action(); await refreshCurrent(current?.id); setMessage(success); return true }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan'); return false }
-    finally { setSaving(false); setPending(false) }
+    finally { setSavingCount((count) => count - 1) }
   }, [current?.id, refreshCurrent])
   function navigate(target: View) { if (locked) return; setCurrent(null); setCreating(false); setView(target); setError(''); setMessage(''); setSearch(''); setStatusFilter('ALL') }
   function startNew() { if (locked) return; setCurrent(null); setCreating(true); setView('inspections'); setError(''); setMessage('') }
   async function create(body: Record<string, unknown>) {
     setError('')
+    setSavingCount((count) => count + 1)
     try {
       const saved = await api.createInspection(body)
       await refreshLists()
@@ -77,6 +94,7 @@ export default function QcApp() {
       setInitialTab('overview')
       setMessage('Inspeksi baru tersimpan.')
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+    finally { setSavingCount((count) => count - 1) }
   }
   async function open(id: string, tab: Tab) { if (locked) return; setError(''); try { setCurrent(await api.inspection(id)); setInitialTab(tab); setCreating(false); setView(tab === 'review' ? 'reports' : 'inspections') } catch (cause) { setError(String(cause)) } }
   async function deleteCurrent(id: string) { setError(''); setMessage('Menghapus…'); try { await api.deleteInspection(id); setCurrent(null); await refreshLists(); setMessage('Inspeksi dihapus.') } catch (cause) { setError(String(cause)); setMessage('Gagal menghapus') } }
@@ -97,7 +115,7 @@ export default function QcApp() {
       <nav>{navigation.map(item => <button type="button" key={item.id} className={view === item.id ? 'active' : ''} aria-current={view === item.id ? 'page' : undefined} disabled={locked} onClick={() => navigate(item.id)}><Icon name={item.icon} />{item.label}{item.id === 'inspections' && <span className="nav-count">{inspections.length}</span>}</button>)}</nav>
       <button className="rail-new" disabled={locked || connection !== 'connected'} onClick={startNew}><Icon name="plus" />Inspeksi baru</button>
       <div className="rail-scene"><FurnitureScene /><div><span>Better quality.</span><strong>Better furniture.</strong></div></div>
-      <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkan…' : 'Koneksi terputus'}<small>Inspectra · v0.1</small></span></div>
+      <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkan…' : 'Koneksi terputus'}<small>Inspectra · v0.1.1</small></span></div>
     </aside>
     <div className="content-shell"><header className="topbar"><div className="breadcrumb">{current || creating ? <><button disabled={locked} onClick={() => navigate(view)}>{view === 'reports' ? 'Laporan' : 'Inspeksi'}</button><span>/</span>{current?.inspection_number || 'Baru'}</> : navigation.find(item => item.id === view)?.label}</div>
       {!current && !creating && view !== 'settings' && <label className="global-search"><Icon name="search" /><input aria-label="Cari inspeksi, PO, produk atau customer" value={search} onChange={event => { setSearch(event.target.value); if (view === 'home') setView('inspections') }} placeholder="Cari inspeksi, PO, produk atau customer…" /></label>}
@@ -113,7 +131,7 @@ export default function QcApp() {
       {connection === 'checking' ? <div className="loading-panels" aria-label="Memuat inspeksi"><div /><div /><div /></div>
       : <>{connection === 'unavailable' && <div className="save-recovery" role="alert">Koneksi ke penyimpanan lokal terputus. Draf yang sedang dibuka tetap ditampilkan agar tidak hilang; penyimpanan baru akan gagal sampai tersambung.<button type="button" onClick={() => window.location.reload()}>Coba sambung ulang</button></div>}
       {connection === 'unavailable' && !current && !creating ? <div className="panel empty-state"><Icon name="database" /><h2>Penyimpanan belum terhubung</h2><p>Data tetap tersimpan di komputer ini. Buka kembali aplikasi untuk menyambung.</p><button className="primary-action" onClick={() => window.location.reload()}><Icon name="refresh" />Coba sambung ulang</button></div>
-      : current ? <Workspace key={current.id} inspection={current} defects={defects} run={run} refresh={() => refreshCurrent(current.id)} onDelete={() => deleteCurrent(current.id)} initialTab={initialTab} onPendingChange={setPending} busy={locked} />
+      : current ? <Workspace key={current.id} inspection={current} defects={defects} run={run} refresh={() => refreshCurrent(current.id)} onDelete={() => deleteCurrent(current.id)} initialTab={initialTab} onPendingChange={onPendingChange} busy={locked} />
       : creating ? <NewInspection customers={customers} products={products} onCreate={create} onRefresh={refreshLists} />
       : view === 'master' ? <div className="master-grid"><section className="panel"><h2>Customer <span className="count-label">{customers.length}</span></h2><p>Dipilih saat membuat inspeksi.</p>{customers.filter(c => `${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())).map(c => <div className="master-row" key={c.id}><strong>{c.name}</strong><span>{c.code}</span></div>)}</section><section className="panel"><h2>Produk <span className="count-label">{products.length}</span></h2><p>Standar produk tetap terpisah dari hasil ukur.</p>{products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => <div className="master-row" key={p.id}><strong>{p.name}</strong><span>{customers.find(c => c.id === p.customer_id)?.name || '—'}</span></div>)}</section><section className="panel"><h2>Jenis defect <span className="count-label">{defects.length}</span></h2><p>Saran Cause, Repair, CAP perlu persetujuan QC.</p><div className="defect-tags">{defects.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(d => <span key={d.id}>{d.name}</span>)}</div></section><button className="small-action master-create" onClick={startNew}><Icon name="plus" />Tambah customer atau produk melalui inspeksi baru</button></div>
       : view === 'settings' ? <div className="settings-grid"><article className="panel"><Icon name="database" /><h2>Data di komputer ini</h2><p>SQLite menyimpan inspeksi. Foto dan laporan disimpan sebagai berkas lokal. Internet tidak diperlukan saat melakukan inspeksi.</p><p className="field-help">Paket EXE menyimpan data di folder pengguna Windows. Pembaruan aplikasi mempertahankan data yang sudah ada.</p></article><article className="panel"><Icon name="report" /><h2>Preview & laporan Word</h2><p>DOCX bisa dibuat langsung dari Inspectra. Preview tiap halaman memerlukan Microsoft Word yang terpasang di Windows.</p><p className="field-help">Versi 0.1 · Tidak ada layanan AI atau akun cloud yang wajib digunakan.</p></article></div>
