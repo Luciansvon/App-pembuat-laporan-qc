@@ -31,7 +31,11 @@ dokumen yang tersedia di HP. Ini bukan renderer halaman Word internal. Jika
 aplikasi pembuka belum terpasang, tampilkan pesan yang bisa ditindaklanjuti;
 Simpan DOCX tetap tersedia.
 
-APK dari runner memakai debug key sementara. Sebelum menguji pembaruan lokal,
+APK final dari runner masih unsigned: setelah build, `tools/finalize_android.py`
+menghapus ekstensi MarkupSafe host yang opsional dan memeriksa ABI seluruh
+library native, termasuk Python bundle. MarkupSafe memakai fallback Python
+resminya. ARM64 juga harus memiliki alignment ELF 16 KiB; ZIP di-align sebelum
+signing. Paket mentah tidak boleh langsung dirilis. Sebelum menguji pembaruan lokal,
 jalankan `tools/sign_android_debug.ps1 -InputApk <apk>` agar semua kandidat lokal
 memakai debug key Inspectra yang sama di profil pengguna. Kunci ini tetap privat
 di luar repo, bukan kunci rilis produksi. Pembaruan berikutnya memakai `adb install -r`

@@ -67,6 +67,16 @@ jobs:
             --android-api=35 --ndk-api=24 \
             --icon=assets/qc-android.png --debug \
             2>&1 | tee .artifacts/android-build.log
+      - name: Finalize and validate Android native libraries
+        run: |
+          set -euo pipefail
+          python tools/finalize_android.py --input inspectra-debug-0.1.2.apk \
+            --output .artifacts/android-unsigned.apk --abi '${{ inputs.arch }}' \
+            | tee .artifacts/android-package.json
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 \
+            .artifacts/android-unsigned.apk .artifacts/Inspectra-0.1.2-${{ inputs.arch }}.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 4 \
+            .artifacts/Inspectra-0.1.2-${{ inputs.arch }}.apk
       - name: Preserve native distribution for local Java QA
         if: ${{ always() }}
         run: |
@@ -81,8 +91,8 @@ jobs:
         with:
           name: inspectra-android-${{ inputs.arch }}-${{ github.run_id }}
           path: |
-            *.apk
-            dist/*.apk
+            .artifacts/Inspectra-0.1.2-*.apk
+            .artifacts/android-package.json
             .artifacts/android-build.log
             .artifacts/android-native-dist.tar.gz
           if-no-files-found: warn
