@@ -28,6 +28,13 @@ mengisi row penuh secara terpusat; pasangan foto memakai dua kolom.
 Caption yang diisi QC tampil pada baris terpusat setelah foto atau pasangan
 foto. Dua caption berbeda tetap tampil dengan pemisah `|`.
 
+Jumlah foto menyesuaikan susunan: satu foto memakai sel gabungan; dua foto
+berdampingan; jumlah ganjil menyisakan satu foto terpusat pada sel gabungan
+baris terakhir. Ukuran foto dibatasi lebar isi sel setelah padding, dengan
+rasio asli tanpa crop. Pada issue, batas tinggi dibagi berdasarkan jumlah
+baris foto agar caption dan CAUSE/REPAIR/CAP tetap mendapat ruang. Tabel
+nested tetap memiliki paragraf pemisah supaya gambar tidak menutup garis ISSUE.
+
 Konfigurasi `combined_blocks` dapat menempatkan satu Drawing dan hingga dua
 foto Dimension dalam satu bingkai. Section lain mengikuti alur halaman Word,
 tanpa page break paksa per section. Halaman Word yang sudah dirender menjadi

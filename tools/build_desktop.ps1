@@ -1,7 +1,15 @@
-param([switch]$SkipFrontendBuild)
+param(
+    [switch]$SkipFrontendBuild,
+    [string]$OutputDirectory = '.artifacts\desktop'
+)
 $ErrorActionPreference = 'Stop'
 $project = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $python = Join-Path $project '.venv\Scripts\python.exe'
+$artifactRoot = [IO.Path]::GetFullPath((Join-Path $project '.artifacts'))
+$outputRoot = [IO.Path]::GetFullPath((Join-Path $project $OutputDirectory))
+if (-not $outputRoot.StartsWith($artifactRoot + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) { throw 'EXE output must stay inside .artifacts.' }
+$output = Join-Path $outputRoot 'Inspectra.exe'
 if (-not (Test-Path -LiteralPath $python)) { throw 'Project .venv is missing' }
 if (-not $SkipFrontendBuild) {
     Push-Location (Join-Path $project 'frontend')
@@ -12,7 +20,8 @@ if (-not $SkipFrontendBuild) {
 }
 Push-Location $project
 try {
-    $running = Get-Process -Name 'Inspectra','QC-Report-Assistant*' -ErrorAction SilentlyContinue
+    $running = Get-Process -Name 'Inspectra','QC-Report-Assistant*' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq $output }
     if ($running) { throw 'Inspectra masih berjalan. Tutup aplikasi dulu lalu ulangi build agar berkas output tidak terkunci.' }
     $dataFiles = @(
         'backend\alembic.ini;backend',
@@ -25,13 +34,12 @@ try {
         'templates\default.docx;templates'
     )
     $arguments = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed',
-        '--name', 'Inspectra', '--paths', 'backend', '--distpath', '.artifacts\desktop',
+        '--name', 'Inspectra', '--paths', 'backend', '--distpath', $outputRoot,
         '--icon', 'assets\qc-windows.ico', '--collect-all', 'webview', '--collect-all', 'pythonnet')
     foreach ($entry in $dataFiles) { $arguments += @('--add-data', $entry) }
     $arguments += 'tools\desktop_launcher.py'
     & $python @arguments
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
-    $output = Join-Path $project '.artifacts\desktop\Inspectra.exe'
     if (-not (Test-Path -LiteralPath $output)) { throw 'EXE output missing' }
     Get-Item -LiteralPath $output | Select-Object FullName,Length
     Get-FileHash -LiteralPath $output -Algorithm SHA256 | Select-Object Hash

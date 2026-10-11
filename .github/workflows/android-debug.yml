@@ -41,6 +41,8 @@ jobs:
           mkdir -p .artifacts/p4a/pythonforandroid/bootstraps/webview/build/src/main/res/xml
           cp android/res/xml/inspectra_file_paths.xml \
             .artifacts/p4a/pythonforandroid/bootstraps/webview/build/src/main/res/xml/
+          cp android/java/InspectraBridge.java \
+            .artifacts/p4a/pythonforandroid/bootstraps/webview/build/src/main/java/org/kivy/android/
           python -m pip install --editable .artifacts/p4a
           python -m pip install 'Cython==3.3.0'
       - name: Prepare Inspectra payload
@@ -56,7 +58,7 @@ jobs:
           PYTHONPATH=.artifacts/p4a python -m pythonforandroid.toolchain apk \
             --private=.artifacts/android-stage \
             --package=com.luciansvon.inspectra \
-            --name=Inspectra --version=0.1.0 --dist-name=inspectra \
+            --name=Inspectra --version=0.1.2 --numeric-version=1024102 --dist-name=inspectra \
             --bootstrap=webview --requirements="$requirements" --port=5000 \
             --local-recipes=android/p4a-recipes \
             --enable-androidx --depend=androidx.core:core:1.15.0 \

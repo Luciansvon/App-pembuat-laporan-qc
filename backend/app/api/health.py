@@ -18,7 +18,7 @@ class Capabilities(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
-    version: str = "0.1.1"
+    version: str = "0.1.2"
     stage: Literal["foundation"] = "foundation"
     database: Literal["connected"] = "connected"
     capabilities: Capabilities

@@ -1,8 +1,50 @@
 # Inspectra
 
 Aplikasi lokal untuk mencatat inspeksi furnitur dan membuat laporan Word.
-v0.1.1 menjalankan alur customer → produk → inspeksi → foto/pengukuran/issue → review
+v0.1.2 menjalankan alur customer → produk → inspeksi → foto/pengukuran/issue → review
 → DOCX, tanpa layanan AI atau cloud saat dipakai di laptop QC.
+
+## Unduh versi beta
+
+[Rilis v0.1.2-beta.1](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.2-beta.1)
+menyediakan paket sesuai perangkat:
+
+| Perangkat | Berkas | Cara pakai |
+| --- | --- | --- |
+| Windows x64 | `Inspectra.exe` | Unduh lalu jalankan; portable tanpa installer |
+| HP Android ARM64, Android 7+ | `Inspectra-0.1.2-arm64.apk` | Pasang APK di HP; timpa instalasi lama untuk mempertahankan data |
+| Verifikasi unduhan | `SHA256SUMS.txt`, `Inspectra-artifact-manifest.json` | Cocokkan SHA-256 dengan berkas yang diunduh |
+
+EXE belum ditandatangani digital. APK memakai signing debug Inspectra yang
+stabil untuk beta, bukan signing produksi. Jangan uninstall APK saat memperbarui
+jika ingin mempertahankan database dan foto di HP.
+
+## Foto adaptif
+
+Foto menyesuaikan jumlah dan ruang sel tabel, tetap proporsional tanpa crop.
+Susunan 1–6 foto: **1**, **2**, **2+1**, **2+2**, **2+2+1**, **2+2+2**.
+Foto terakhir pada jumlah ganjil berada di sel penuh terpusat. Batas tinggi
+mengikuti jumlah baris agar caption dan CAUSE/REPAIR/CAP tetap mendapat ruang;
+gambar tidak menutup garis ISSUE. Standar, toleransi dan hasil ukur tetap
+terpisah; tanpa toleransi lengkap, hasil adalah INFO, bukan otomatis FAIL.
+
+## Preview dan penyimpanan
+
+| Fitur | Windows EXE | Android APK beta |
+| --- | --- | --- |
+| Generate DOCX | Generator lokal | Generator di dalam APK |
+| Preview halaman dalam Inspectra | Memerlukan Microsoft Word terpasang | Belum tersedia |
+| Lihat laporan di aplikasi dokumen | Buka DOCX hasil simpan | **Buka DOCX di Word/WPS**; perlu aplikasi pembuka di HP |
+| Simpan laporan | Dialog simpan Windows | Dialog dokumen Android; hasil dibaca kembali dan dicocokkan SHA-256 |
+| Lokasi data | `%LOCALAPPDATA%/QC Report Assistant/data` | Penyimpanan privat aplikasi di HP |
+
+APK membundel backend Python, SQLite, foto dan generator di perangkat.
+Pengujian emulator membuktikan startup, API lokal, upload foto, DOCX, dan data
+lama setelah pembaruan. HP fisik, kamera lengkap, provider dokumen, aplikasi
+pembuka, offline tanpa koneksi dan restart HP masih perlu pengujian.
+Word/WPS Android menampilkan DOCX lewat aplikasi eksternal, bukan renderer
+halaman internal Inspectra. PWA hanya menyimpan shell; offline edit/replay
+belum tersedia. Backup harus mencakup SQLite dan foto bersama.
 
 Referensi yang dipakai: POLIFORM LAGOON (22 halaman, 121 gambar) dan RH MARB
 (18 halaman, 97 gambar). Keduanya dibuka read-only dan dirender melalui Microsoft Word;
@@ -15,6 +57,7 @@ telah digantikan oleh RH sebagai referensi laporan.
 - [Arsitektur](docs/architecture.md): SQLite, foto lokal, API, report, DEV-INFRA, batas PWA Android.
 - [Evidence pemeriksaan](docs/verification.md): tes, build, Word visual, browser, dan batas bukti.
 - [Perbaikan dan evidence v0.1.1](docs/release-0.1.1.md): autosave, nomor inspeksi, validasi angka dan release desktop beta.
+- [Catatan v0.1.2](docs/release-0.1.2.md): foto adaptif, paket Windows/Android dan batas penerimaan.
 - `frontend/`: React + TypeScript + Vite, alur QC responsif, kamera/file picker, autosave dan PWA shell.
 - `backend/`: FastAPI + SQLite/SQLModel + Alembic, CRUD, foto, review, DOCX.
 - `assets/`: ikon Windows dan Android yang diberikan pemilik proyek.
@@ -66,14 +109,16 @@ baru. DOCX tetap dapat dibuat tanpa Word.
 Paket Windows dibuat dengan `powershell -File tools/build_desktop.ps1` dan keluar
 sebagai `.artifacts/desktop/Inspectra.exe`. Data pengguna paket Windows tetap
 di `%LOCALAPPDATA%/QC Report Assistant/data` agar inspeksi dari nama lama tidak
-hilang. APK Android mandiri adalah target paket terpisah; backend lokal, render
-halaman tanpa Word, dan uji perangkat Android belum selesai.
+hilang. APK Android membundel backend lokal dan generator sendiri; build memakai
+workflow manual yang sudah ada. Lihat [panduan Android](android/README.md).
+Preview halaman internal APK dan penerimaan HP fisik belum selesai.
 
 ## Verifikasi
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests -v --junitxml=.artifacts/backend-tests.xml
 cd frontend
+npm test
 npm run build
 ```
 
