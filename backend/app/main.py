@@ -55,7 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             engine.dispose()
 
-    application = FastAPI(title="Inspectra", version="0.1.1", lifespan=lifespan)
+    application = FastAPI(title="Inspectra", version="0.1.2", lifespan=lifespan)
 
     @application.exception_handler(RequestValidationError)
     async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:

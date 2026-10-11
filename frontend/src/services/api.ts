@@ -1,5 +1,6 @@
 import type { Customer, Defect, Inspection, Issue, Measurement, Photo, Product, ReportPreview, Review, TestReading } from '../types/qc'
 import { errorMessage } from './errorMessage'
+import { androidReport, isAndroidApp, type AndroidReportResult } from './android'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -60,11 +61,9 @@ export const api = {
     }
     return response.json() as Promise<Photo[]>
   },
-  async downloadReport(id: string): Promise<'downloaded' | 'save-dialog'> {
-    if (navigator.userAgent.includes('InspectraAndroid/0.1')) {
-      window.location.href = `inspectra-report://download/${encodeURIComponent(id)}`
-      return 'save-dialog'
-    }
+  openAndroidReport: (id: string) => androidReport(id, 'open'),
+  async downloadReport(id: string): Promise<'downloaded' | AndroidReportResult> {
+    if (isAndroidApp()) return androidReport(id, 'download')
     const response = await fetch(`/api/inspections/${id}/report/docx`, { method: 'POST' })
     if (!response.ok) {
       let detail = `HTTP ${response.status}`

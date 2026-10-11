@@ -129,6 +129,48 @@ def fitted_size(path: Path, max_width_cm: float = 7.5, max_height_cm: float = 6.
     return width * scale, height * scale
 
 
+PHOTO_PADDING_CM = 0.12
+PHOTO_PARENT_PADDING_CM = 0.20
+
+
+def photo_table_width(table, widths_cm: tuple[float, ...]) -> None:
+    """Keep the grid, preferred width and cell padding in agreement for Word."""
+    table.autofit = False
+    for column, width in zip(table.columns, widths_cm, strict=True):
+        column.width = Cm(width)
+    properties = table._tbl.tblPr
+    preferred = properties.find(qn("w:tblW"))
+    if preferred is None:
+        preferred = OxmlElement("w:tblW")
+        properties.insert(0, preferred)
+    preferred.set(qn("w:type"), "dxa")
+    preferred.set(qn("w:w"), str(sum(Cm(width).twips for width in widths_cm)))
+    margins = properties.find(qn("w:tblCellMar"))
+    if margins is None:
+        margins = OxmlElement("w:tblCellMar")
+        properties.append(margins)
+    for edge in ("top", "bottom", "left", "right"):
+        margin = margins.find(qn(f"w:{edge}"))
+        if margin is None:
+            margin = OxmlElement(f"w:{edge}")
+            margins.append(margin)
+        margin.set(qn("w:type"), "dxa")
+        margin.set(qn("w:w"), str(Cm(PHOTO_PADDING_CM).twips))
+
+
+def photo_paragraph(paragraph) -> None:
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    # An inherited exact line height can make an inline image paint over a row border.
+    paragraph.paragraph_format.line_spacing = 1.0
+
+
+def cell_photo_width(cell) -> float:
+    # Leave room for both explicit cell margins, including a merged final cell.
+    return cell.width / Cm(1).emu - 2 * PHOTO_PADDING_CM
+
+
 def insert_photo(paragraph, photo: InspectionPhoto, settings: Settings,
                  max_width_cm: float, max_height_cm: float) -> None:
     try:
@@ -147,7 +189,7 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
     if not photos:
         return
     table = document.add_table(rows=0, cols=2)
-    table.autofit = False
+    photo_table_width(table, (width_cm / 2, width_cm / 2))
     if border:
         borders = OxmlElement("w:tblBorders")
         for edge in ("top", "bottom", "left", "right"):
@@ -160,8 +202,6 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             edge_border.set(qn("w:val"), "nil")
             borders.append(edge_border)
         table._tbl.tblPr.append(borders)
-    table.columns[0].width = Cm(width_cm / 2)
-    table.columns[1].width = Cm(width_cm / 2)
     for start in range(0, len(photos), 2):
         pair = photos[start:start + 2]
         row = table.add_row()
@@ -173,10 +213,9 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
         for index, photo in enumerate(pair):
             cell = row.cells[index]
             paragraph = cell.paragraphs[0]
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            paragraph.paragraph_format.space_after = Pt(0)
+            photo_paragraph(paragraph)
             insert_photo(paragraph, photo, settings,
-                         width_cm - 2 if len(pair) == 1 else width_cm / 2 - 0.8,
+                         cell_photo_width(cell),
                          single_height_cm if len(photos) == 1 else 5.8)
         captions = [photo.caption.strip() for photo in pair if photo.caption and photo.caption.strip()]
         if captions:
@@ -271,27 +310,35 @@ def issue_block(document, issue: Issue, photos: list[InspectionPhoto], settings:
         if not chunk:
             photo_cell.text = "No issue photo recorded"
         else:
+            margins = OxmlElement("w:tcMar")
+            for edge in ("top", "bottom", "left", "right"):
+                margin = OxmlElement(f"w:{edge}")
+                margin.set(qn("w:type"), "dxa")
+                margin.set(qn("w:w"), str(Cm(PHOTO_PARENT_PADDING_CM).twips))
+                margins.append(margin)
+            photo_cell._tc.get_or_add_tcPr().append(margins)
             grid = photo_cell.add_table(rows=0, cols=2)
-            grid.autofit = False
-            grid.columns[0].width = Cm(8.7)
-            grid.columns[1].width = Cm(8.7)
+            # Nested tables must fit inside the parent's content area, not its outer width.
+            grid_width_cm = photo_cell.width / Cm(1).emu - 2 * PHOTO_PARENT_PADDING_CM
+            photo_table_width(grid, (grid_width_cm / 2, grid_width_cm / 2))
             rows_count = (len(chunk) + 1) // 2
-            max_h = 5.4 if rows_count >= 3 else (7.0 if rows_count == 2 else 9.5)
+            # Share a bounded photo budget across 1, 2 or 3 rows, reserving room
+            # for captions and CAUSE/REPAIR/CAP instead of growing with pixel size.
+            max_h = min(9.5, 14.0 / rows_count)
             for pair_index in range(0, len(chunk), 2):
                 pair = chunk[pair_index:pair_index + 2]
                 row = grid.add_row()
                 for cell in row.cells:
-                    cell.width = Cm(8.7)
+                    cell.width = Cm(grid_width_cm / 2)
                     cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 if len(pair) == 1:
                     row.cells[0].merge(row.cells[1])
                 for photo_index, photo in enumerate(pair):
                     cell = row.cells[photo_index]
                     paragraph = cell.paragraphs[0]
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    paragraph.paragraph_format.space_after = Pt(0)
+                    photo_paragraph(paragraph)
                     insert_photo(paragraph, photo, settings,
-                                 max_width_cm=15.8 if len(chunk) == 1 else 7.81,
+                                 max_width_cm=cell_photo_width(cell),
                                  max_height_cm=max_h)
                 captions = [photo.caption.strip() for photo in pair if photo.caption and photo.caption.strip()]
                 if captions:
@@ -304,9 +351,10 @@ def issue_block(document, issue: Issue, photos: list[InspectionPhoto], settings:
             for paragraph in photo_cell.paragraphs:
                 paragraph.paragraph_format.space_after = Pt(0)
                 paragraph.paragraph_format.space_before = Pt(0)
+                paragraph.paragraph_format.line_spacing = Pt(1)
                 paragraph.add_run().font.size = Pt(1)
-            first_paragraph = photo_cell.paragraphs[0]._element
-            first_paragraph.getparent().remove(first_paragraph)
+            # Word needs the leading paragraph to separate a nested table from the
+            # preceding ISSUE row. Removing it lets square images cover that border.
         if index != len(chunks) - 1:
             continue
         for row, (label, value) in zip(table.rows[2:], (

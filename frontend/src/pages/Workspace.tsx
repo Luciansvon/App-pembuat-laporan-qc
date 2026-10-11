@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../services/api'
+import { isAndroidApp } from '../services/android'
 import { useAutosave } from '../hooks/useAutosave'
 import type { Defect, Inspection, Issue, Measurement, Photo, ReportPreview, Review } from '../types/qc'
 
@@ -155,7 +156,7 @@ function Issues({ inspection, defects, run, capture, onPendingChange }: { inspec
   return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">05 / ISSUES</span><h2>Temuan QC</h2></div><p>Preset hanya saran teks. QC tetap memeriksa Cause, Repair dan CAP.</p></div><form className="new-issue" onSubmit={(event) => { event.preventDefault(); void run(() => api.issues(inspection.id, { defect_type: name, quantity: quantity ? Number(quantity) : null, sort_order: inspection.issues.length }), 'Issue baru tersimpan.').then((saved) => { if (saved) { setName(''); setQuantity('') } }) }}><label>Jenis defect<input list="defect-options" value={name} onChange={(event) => setName(event.target.value)} required placeholder="Gap, Scratch, atau defect baru" /><datalist id="defect-options">{defects.map((defect) => <option key={defect.id} value={defect.name} />)}</datalist></label><label>Jumlah pcs<input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="Opsional" /></label><button type="submit" className="primary-action" disabled={!name.trim()}>+ Buat issue</button></form><div className="record-list">{inspection.issues.map((issue) => <IssueCard key={issue.id} issue={issue} defects={defects} photos={inspection.photos} run={run} capture={capture} onPendingChange={(pending) => onPendingChange(issue.id, pending)} />)}{inspection.issues.length === 0 && <p className="empty-inline">Belum ada issue. Tambahkan bila ditemukan; tidak perlu membuat issue fiktif.</p>}</div></div>
 }
 
-function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action }) {
+function ReviewPanel({ inspection, run, onPendingChange }: { inspection: Inspection; run: Action; onPendingChange: (scope: string, pending: boolean) => void }) {
   const [review, setReview] = useState<Review | null>(null)
   const [validationBusy, setValidationBusy] = useState(true)
   const [reportBusy, setReportBusy] = useState(false)
@@ -163,6 +164,10 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
   const [preview, setPreview] = useState<ReportPreview | null>(null)
   const [selectedPage, setSelectedPage] = useState(0)
   const [message, setMessage] = useState('')
+  useEffect(() => {
+    onPendingChange('report', reportBusy || previewBusy)
+    return () => onPendingChange('report', false)
+  }, [reportBusy, previewBusy, onPendingChange])
   useEffect(() => {
     let active = true
     setValidationBusy(true)
@@ -193,8 +198,13 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
   }
   async function showPreview() {
     setPreviewBusy(true)
-    setMessage('Merender halaman Word…')
+    setMessage(isAndroidApp() ? 'Menyiapkan DOCX untuk dibuka…' : 'Merender halaman Word…')
     try {
+      if (isAndroidApp()) {
+        await api.openAndroidReport(inspection.id)
+        setMessage('DOCX dibuka di aplikasi dokumen. Periksa halaman sebelum membagikannya.')
+        return
+      }
       const result = await api.previewReport(inspection.id)
       setPreview(result)
       setSelectedPage(0)
@@ -214,8 +224,8 @@ function ReviewPanel({ inspection, run }: { inspection: Inspection; run: Action 
     {message && <p role="status">{message}</p>}
     <div className="report-actions">
       <button type="button" className="small-action" disabled={validationBusy || previewBusy || reportBusy} onClick={() => void revalidate()}>{validationBusy ? 'Memeriksa…' : 'Periksa ulang'}</button>
-      <button type="button" className="small-action" disabled={validationBusy || reportBusy || !ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Merender…' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
-      <button type="button" className="primary-action" disabled={validationBusy || previewBusy || reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'save-dialog' ? 'Android menyiapkan DOCX. Pilih lokasi saat diminta.' : isDesktopView ? 'Dialog simpan DOCX dibuka. Pilih lokasi di Windows.' : 'Unduhan DOCX dimulai.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? 'Membuat…' : 'Unduh DOCX'}</button>
+      <button type="button" className="small-action" disabled={validationBusy || reportBusy || !ready || previewBusy} onClick={() => void showPreview()}>{previewBusy ? 'Menyiapkan…' : isAndroidApp() ? 'Buka DOCX di Word/WPS' : preview ? 'Perbarui preview' : 'Preview tiap halaman'}</button>
+      <button type="button" className="primary-action" disabled={validationBusy || previewBusy || reportBusy || !ready} onClick={async () => { setReportBusy(true); setMessage('Membuat DOCX…'); try { const result = await api.downloadReport(inspection.id); setMessage(result === 'saved' ? 'DOCX tersimpan dan terverifikasi.' : result === 'cancelled' ? 'Penyimpanan DOCX dibatalkan.' : isDesktopView ? 'Dialog simpan DOCX dibuka. Pilih lokasi di Windows.' : 'Unduhan DOCX dimulai.') } catch (cause) { const detail = String(cause); setMessage(isDesktopView ? `${detail} Jika dialog simpan tidak muncul di jendela Inspectra, ulangi dengan mode browser (--browser).` : detail) } finally { setReportBusy(false) } }}>{reportBusy ? isAndroidApp() ? 'Menunggu Android…' : 'Membuat…' : isAndroidApp() ? 'Simpan DOCX' : 'Unduh DOCX'}</button>
     </div>
     {preview && <section className="report-preview" aria-label="Preview laporan per halaman">
       <div className="report-preview-heading"><strong>Halaman {selectedPage + 1} dari {preview.page_count}</strong><span>Hasil render Microsoft Word</span></div>
@@ -241,7 +251,7 @@ export default function Workspace({ inspection, defects, run, refresh, onDelete,
     {tab === 'measurements' && <Measurements inspection={inspection} run={run} tests={false} />}
     {tab === 'tests' && <Measurements inspection={inspection} run={run} tests />}
     {tab === 'issues' && <Issues inspection={inspection} defects={defects} run={run} capture={(issueId) => { setCaptureIssue(issueId); setTab('photos') }} onPendingChange={onPendingChange} />}
-    {tab === 'review' && <ReviewPanel key={`${inspection.id}:${inspection.revision}`} inspection={inspection} run={run} />}
+    {tab === 'review' && <ReviewPanel key={`${inspection.id}:${inspection.revision}`} inspection={inspection} run={run} onPendingChange={onPendingChange} />}
     <div className="workspace-bottom"><button type="button" className="small-action" disabled={busy} onClick={() => void refresh()}>Muat ulang data</button><button type="button" className="danger-text" disabled={busy} onClick={() => { if (window.confirm(`Hapus inspeksi ${inspection.inspection_number} beserta foto dan laporan? Tindakan ini tidak dapat dibatalkan.`)) void onDelete() }}>Hapus inspeksi</button></div>
   </section>
 }
