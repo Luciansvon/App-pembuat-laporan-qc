@@ -251,6 +251,9 @@ def create_measurement(item_id: str, data: MeasurementIn, session: Session = Dep
 @router.patch("/measurements/{item_id}")
 def patch_measurement(item_id: str, data: MeasurementPatch, session: Session = Depends(db)) -> Measurement:
     item = require(session, Measurement, item_id)
+    if data.category is not None and data.category != "DIMENSION" and session.exec(
+            select(InspectionPhoto.id).where(InspectionPhoto.measurement_id == item_id)).first():
+        raise HTTPException(status_code=409, detail="Move dimension photos before changing the measurement category")
     for key, value in data.model_dump(exclude_unset=True).items():
         if value is None and key in {"category", "label", "sort_order"}:
             raise HTTPException(status_code=422, detail=f"{key} cannot be empty")
@@ -266,6 +269,11 @@ def patch_measurement(item_id: str, data: MeasurementPatch, session: Session = D
 @router.delete("/measurements/{item_id}", dependencies=[Depends(require_confirmation)])
 def delete_measurement(item_id: str, session: Session = Depends(db)) -> dict:
     item = require(session, Measurement, item_id)
+    for photo in session.exec(select(InspectionPhoto).where(InspectionPhoto.measurement_id == item_id)).all():
+        photo.measurement_id = photo.dimension_slot = None
+        photo.section = "PRODUCT_VIEW"
+        session.add(photo)
+    session.flush()
     for reading in session.exec(select(TestReading).where(TestReading.measurement_id == item_id)).all():
         session.delete(reading)
     touch(session, item.inspection_id)
@@ -352,11 +360,41 @@ def delete_issue(item_id: str, session: Session = Depends(db)) -> dict:
     return {"deleted": item_id}
 
 
+def dimension_slots(session: Session, inspection_id: str, measurement_id: str,
+                    count: int, exclude_photo: str | None = None, preferred_slot: int | None = None) -> list[int]:
+    measurement = require(session, Measurement, measurement_id)
+    if measurement.inspection_id != inspection_id or measurement.category != "DIMENSION":
+        raise HTTPException(status_code=422, detail="Choose a dimension from this inspection")
+    linked = session.exec(select(InspectionPhoto).where(InspectionPhoto.measurement_id == measurement_id)).all()
+    occupied = {photo.dimension_slot for photo in linked if photo.id != exclude_photo}
+    available = [slot for slot in (1, 2) if slot not in occupied]
+    if preferred_slot is not None:
+        if preferred_slot not in available:
+            raise HTTPException(status_code=409, detail=f"{measurement.label}: photo slot {preferred_slot} is already filled")
+        available.remove(preferred_slot)
+        available.insert(0, preferred_slot)
+    if count > len(available):
+        raise HTTPException(status_code=409, detail=f"{measurement.label}: maximum 2 dimension photos")
+    return available[:count]
+
+
 @router.post("/inspections/{item_id}/photos", status_code=201)
 def create_photo(item_id: str, request: Request, section: Section = Form(),
                  files: list[UploadFile] = File(), issue_id: str | None = Form(default=None),
+                 measurement_id: str | None = Form(default=None),
+                 dimension_slot: int | None = Form(default=None, ge=1, le=2),
                  session: Session = Depends(db)) -> list[InspectionPhoto]:
+    session.exec(text("BEGIN IMMEDIATE"))
     inspection = require(session, Inspection, item_id)
+    slots: list[int] = []
+    if measurement_id:
+        if section != "DIMENSION" or issue_id:
+            raise HTTPException(status_code=422, detail="Dimension photos cannot be linked to another section or an issue")
+        slots = dimension_slots(session, item_id, measurement_id, len(files), preferred_slot=dimension_slot)
+    elif dimension_slot is not None:
+        raise HTTPException(status_code=422, detail="Choose the dimension for this photo slot first")
+    elif section == "DIMENSION":
+        raise HTTPException(status_code=422, detail="Choose the dimension for these photos first")
     if issue_id and require(session, Issue, issue_id).inspection_id != item_id:
         raise HTTPException(status_code=422, detail="Issue belongs to another inspection")
     existing = session.exec(select(InspectionPhoto.sort_order).where(InspectionPhoto.inspection_id == item_id)
@@ -366,6 +404,7 @@ def create_photo(item_id: str, request: Request, section: Section = Form(),
     try:
         for index, file in enumerate(files):
             photo = InspectionPhoto(inspection_id=item_id, section=section, issue_id=issue_id,
+                                    measurement_id=measurement_id, dimension_slot=slots[index] if slots else None,
                                     file_path="", sort_order=start_order + index)
             photo.file_path = save_photo(request.app.state.settings, inspection, file, photo.id)
             staged.append(photo)
@@ -394,9 +433,24 @@ def get_photo_file(item_id: str, request: Request, session: Session = Depends(db
 @router.patch("/photos/{item_id}")
 def patch_photo(item_id: str, data: PhotoPatch, request: Request,
                 session: Session = Depends(db)) -> InspectionPhoto:
+    session.exec(text("BEGIN IMMEDIATE"))
     photo = require(session, InspectionPhoto, item_id)
     changes = data.model_dump(exclude_unset=True)
     degrees = changes.pop("rotate_degrees", None)
+    target_section = changes.get("section", photo.section)
+    target_measurement = changes.get("measurement_id", photo.measurement_id)
+    if target_section != "DIMENSION":
+        if changes.get("measurement_id"):
+            raise HTTPException(status_code=422, detail="Only DIMENSION photos can be linked to a dimension")
+        changes["measurement_id"] = changes["dimension_slot"] = None
+    elif target_measurement:
+        if changes.get("issue_id", photo.issue_id):
+            raise HTTPException(status_code=422, detail="Dimension photos cannot be linked to an issue")
+        if target_measurement != photo.measurement_id:
+            changes["dimension_slot"] = dimension_slots(session, photo.inspection_id, target_measurement, 1, photo.id)[0]
+        changes["measurement_id"] = target_measurement
+    else:
+        changes["dimension_slot"] = None
     if changes.get("issue_id") and require(session, Issue, changes["issue_id"]).inspection_id != photo.inspection_id:
         raise HTTPException(status_code=422, detail="Issue belongs to another inspection")
     for key, value in changes.items():

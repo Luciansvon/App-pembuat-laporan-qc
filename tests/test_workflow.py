@@ -50,6 +50,10 @@ def test_complete_inspection_generates_clean_word_and_persists(tmp_path: Path) -
         })
         assert measurement.status_code == 201, measurement.text
         assert measurement.json()["result"] == "INFO"
+        dimension_photos = client.post(f"/api/inspections/{item_id}/photos",
+            data={"section": "DIMENSION", "measurement_id": measurement.json()["id"]},
+            files=[("files", (f"height-{slot}.jpg", image_bytes(), "image/jpeg")) for slot in (1, 2)])
+        assert dimension_photos.status_code == 201, dimension_photos.text
         mc = client.post(f"/api/inspections/{item_id}/measurements", json={
             "category": "MC", "label": "Moisture Content", "unit": "%", "sort_order": 1})
         assert mc.status_code == 201
@@ -90,7 +94,7 @@ def test_complete_inspection_generates_clean_word_and_persists(tmp_path: Path) -
         assert "QC   INSPECTION REPORT" in header
         assert "Conclusion" in body
         assert "2 issue" not in body
-        assert len(word.inline_shapes) == 7
+        assert len(word.inline_shapes) == 9
         issue_table = next(table for table in word.tables if table.cell(0, 0).text == "ISSUE")
         assert len(issue_table.rows) == 5
         assert issue_table.cell(0, 1).text == "Gap ( 3 Pcs)"
@@ -102,12 +106,12 @@ def test_complete_inspection_generates_clean_word_and_persists(tmp_path: Path) -
         detail = client.get(f"/api/inspections/{item_id}").json()
         assert detail["measurements"][1]["value_min"] == 9.4
         assert detail["measurements"][1]["value_max"] == 11.1
-        assert len(detail["photos"]) == 7
+        assert len(detail["photos"]) == 9
     with TestClient(create_app(settings)) as client:
         restored = client.get(f"/api/inspections/{item_id}")
         assert restored.status_code == 200
         assert restored.json()["po"] == "QA-PO-001,QA-PO-002"
-        assert len(restored.json()["photos"]) == 7
+        assert len(restored.json()["photos"]) == 9
 
 
 def test_guards_invalid_photo_and_destructive_operations(tmp_path: Path) -> None:
@@ -139,9 +143,11 @@ def test_single_issue_photo_and_caption_between_pairs(tmp_path: Path) -> None:
             data={"section": "DRAWING"},
             files=[("files", ("drawing.jpg", image_bytes(), "image/jpeg"))])
         assert drawing.status_code == 201
+        dimension_measurement = client.post(f"/api/inspections/{item_id}/measurements",
+            json={"category": "DIMENSION", "label": "Length", "unit": "mm"}).json()
         for order in range(2):
             response = client.post(f"/api/inspections/{item_id}/photos",
-                data={"section": "DIMENSION", "sort_order": order},
+                data={"section": "DIMENSION", "measurement_id": dimension_measurement["id"]},
                 files=[("files", (f"dimension-{order}.jpg", image_bytes(), "image/jpeg"))])
             assert response.status_code == 201
             if order == 0:
@@ -157,8 +163,9 @@ def test_single_issue_photo_and_caption_between_pairs(tmp_path: Path) -> None:
         assert "Product Dimension" in combined.cell(0, 0).text
         assert len(combined.cell(0, 0).tables) == 2
         dimension = combined.cell(0, 0).tables[1]
-        assert "503 mm (start from 100 mm)" in dimension.cell(1, 0).text
-        assert dimension.cell(1, 0)._tc is dimension.cell(1, 1)._tc
+        assert "Length" in dimension.cell(0, 0).text
+        assert "503 mm (start from 100 mm)" in dimension.cell(2, 0).text
+        assert dimension.cell(2, 0)._tc is dimension.cell(2, 1)._tc
         issue_table = next(table for table in word.tables if table.cell(0, 0).text == "ISSUE")
         photo_row = issue_table.cell(1, 0).tables[0].rows[0]
         assert photo_row.cells[0]._tc is photo_row.cells[1]._tc

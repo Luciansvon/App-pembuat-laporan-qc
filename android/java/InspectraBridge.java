@@ -56,7 +56,7 @@ public final class InspectraBridge extends WebChromeClient {
         this.webView = webView;
         WebView.setWebContentsDebuggingEnabled((activity.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0);
         activity.getWindow().getDecorView().setBackgroundColor(0xff173b2f);
-        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + " InspectraAndroid/0.1.2");
+        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + " InspectraAndroid/0.1.3");
         webView.getSettings().setAllowFileAccess(false);
         webView.getSettings().setAllowContentAccess(true);
         webView.setWebChromeClient(this);
