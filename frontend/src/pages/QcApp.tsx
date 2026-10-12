@@ -130,7 +130,7 @@ export default function QcApp() {
       <p className="rail-label">RUANG KERJA</p>
       <nav>{navigation.map(item => <button type="button" key={item.id} className={view === item.id ? 'active' : ''} aria-current={view === item.id ? 'page' : undefined} disabled={locked} onClick={() => navigate(item.id)}><Icon name={item.icon} />{item.label}{item.id === 'inspections' && <span className="nav-count">{inspections.length}</span>}</button>)}</nav>
       <button className="rail-new" disabled={locked || connection !== 'connected'} onClick={startNew}><Icon name="plus" />Inspeksi baru</button>
-      <div className="rail-scene"><FurnitureScene /><div><span>Better quality.</span><strong>Better furniture.</strong></div></div>
+      <div className="rail-scene"><img src="/rail-qc.jpg" alt="" /><div><span>Better quality.</span><strong>Better furniture.</strong></div></div>
       <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkanâ€¦' : 'Koneksi terputus'}<small>Inspectra Â· v{appVersion}</small></span></div>
     </aside>
     <div className="content-shell"><header className="topbar"><div className="breadcrumb">{current || creating ? <><button disabled={locked} onClick={() => navigate(view)}>{view === 'reports' ? 'Laporan' : 'Inspeksi'}</button><span>/</span>{current?.inspection_number || 'Baru'}</> : navigation.find(item => item.id === view)?.label}</div>
