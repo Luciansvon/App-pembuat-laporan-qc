@@ -76,6 +76,25 @@ def test_dimension_requires_two_and_rejects_extra_upload_atomically(tmp_path: Pa
         assert upload(client, inspection, mc['id']).status_code == 422
 
 
+def test_dimension_section_starts_on_new_page_after_product_view(tmp_path: Path) -> None:
+    with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
+        inspection = create_basic_inspection(client, 'RH')['id']
+        views = client.post(f'/api/inspections/{inspection}/photos', data={'section': 'PRODUCT_VIEW'},
+            files=[('files', (f'view-{i}.jpg', image_bytes(), 'image/jpeg')) for i in range(2)])
+        assert views.status_code == 201, views.text
+        measurement = client.post(f'/api/inspections/{inspection}/measurements', json={
+            'category': 'DIMENSION', 'label': 'Length', 'unit': 'mm', 'value': 1965}).json()
+        assert upload(client, inspection, measurement['id'], count=2).status_code == 201
+        assert client.post(f'/api/inspections/{inspection}/validate').json()['errors'] == []
+        response = client.post(f'/api/inspections/{inspection}/report/docx')
+        assert response.status_code == 200, response.text
+        word = Document(io.BytesIO(response.content))
+        view_heading = next(p for p in word.paragraphs if p.text == 'Product View')
+        dimension_heading = next(p for p in word.paragraphs if p.text == 'Product Dimension')
+        assert view_heading.paragraph_format.page_break_before in (None, False)
+        assert dimension_heading.paragraph_format.page_break_before is True
+
+
 def test_old_photos_survive_migration_and_explicit_assignment(tmp_path: Path, monkeypatch) -> None:
     settings = Settings(data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:

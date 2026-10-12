@@ -47,8 +47,10 @@ ukuran di UI sebelum foto lama dapat masuk laporan. Menghapus ukuran melalui
 konfirmasi mengembalikan fotonya ke Product View, bukan menghapus berkas foto.
 
 Konfigurasi `combined_blocks` dapat menempatkan satu Drawing dan satu pasangan
-foto Dimension dalam satu bingkai. Section lain mengikuti alur halaman Word,
-tanpa page break paksa per section. Halaman Word yang sudah dirender menjadi
+foto Dimension dalam satu bingkai. Kunci `break_before` di katalog menandai
+section yang selalu mulai halaman baru — saat ini `DIMENSION` di semua template —
+agar Product Dimension tidak menempel pada sisa halaman Product View. Section lain
+mengikuti alur halaman Word tanpa page break paksa. Halaman Word yang sudah dirender menjadi
 preview per halaman sehingga QC dapat melihat pemisahan yang sebenarnya.
 
 ## Pengukuran dan test

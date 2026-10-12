@@ -14,7 +14,8 @@
       "box_axes": ["L", "W", "H"],
       "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER", "ISSUE", "CONCLUSION"],
       "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
-      "max_photos_per_page": 6
+      "max_photos_per_page": 6,
+      "break_before": ["DIMENSION"]
     },
     "rh": {
       "status": "READY",
@@ -26,7 +27,8 @@
       "dimension_axes": ["L", "D", "H"],
       "box_axes": ["W", "D", "H"],
       "sections": ["PRODUCT_VIEW", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
-      "max_photos_per_page": 6
+      "max_photos_per_page": 6,
+      "break_before": ["DIMENSION"]
     },
     "default": {
       "status": "READY",
@@ -39,7 +41,8 @@
       "box_axes": ["L", "W", "H"],
       "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
       "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
-      "max_photos_per_page": 6
+      "max_photos_per_page": 6,
+      "break_before": ["DIMENSION"]
     }
   }
 }

@@ -433,7 +433,9 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
     sections_photos = {section: [photo for photo in photos if photo.section == section and photo.issue_id is None]
                        for section in config["sections"]}
     combined = {block["sections"][0]: block for block in config.get("combined_blocks", [])}
+    break_before = set(config.get("break_before", []))
     consumed: set[str] = set()
+    started = False
     for section in config["sections"]:
         if section in {"ISSUE", "CONCLUSION"} or section in consumed:
             continue
@@ -443,16 +445,22 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
         block = combined.get(section)
         if block and all(0 < len(sections_photos.get(name, [])) <= limit for name, limit
                          in zip(block["sections"], block["max_counts"], strict=True)):
+            if started and any(name in break_before for name in block["sections"]):
+                document.add_page_break()
             combined_section_block(document, block["sections"], sections_photos, settings, dimensions)
             consumed.update(block["sections"])
+            started = True
             continue
         if section == "DIMENSION":
-            heading(document, SECTION_TITLES[section])
+            heading(document, SECTION_TITLES[section], page_break=started and section in break_before)
             dimension_photo_blocks(document, dimensions, section_photos, settings)
+            started = True
             continue
         for start in range(0, len(section_photos), config["max_photos_per_page"]):
-            heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()))
+            heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()),
+                    page_break=started and section in break_before and start == 0)
             photo_grid(document, section_photos[start:start + config["max_photos_per_page"]], settings)
+        started = True
     measurement_table(document, measurements, session)
     for issue in issues:
         issue_block(document, issue, [photo for photo in photos if photo.issue_id == issue.id], settings)
