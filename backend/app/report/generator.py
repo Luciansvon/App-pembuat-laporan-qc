@@ -11,7 +11,7 @@ from zipfile import ZipFile, ZipInfo
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt, RGBColor
 from fastapi import HTTPException
@@ -149,6 +149,7 @@ PHOTO_PARENT_PADDING_CM = 0.20
 def photo_table_width(table, widths_cm: tuple[float, ...]) -> None:
     """Keep the grid, preferred width and cell padding in agreement for Word."""
     table.autofit = False
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
     for column, width in zip(table.columns, widths_cm, strict=True):
         column.width = Cm(width)
     properties = table._tbl.tblPr

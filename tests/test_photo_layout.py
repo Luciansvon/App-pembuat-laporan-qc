@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.shared import Cm
 from fastapi.testclient import TestClient
@@ -81,6 +82,7 @@ def test_layout_cols_render_requested_columns(tmp_path: Path, cols: int) -> None
     photo_grid(document, photos, Settings(data_dir=tmp_path), cols=cols)
     grid = document.tables[0]
     assert len(grid.columns) == cols
+    assert grid.alignment == WD_TABLE_ALIGNMENT.CENTER
     photo_rows = [row for row in grid.rows if row._tr.xpath(".//wp:inline")]
     assert len(photo_rows) == (count + cols - 1) // cols
     assert len(document.inline_shapes) == count
