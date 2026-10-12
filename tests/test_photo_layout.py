@@ -140,7 +140,7 @@ def test_layout_flows_into_docx_and_stays_deterministic(tmp_path: Path) -> None:
         assert first.status_code == 200, first.text
         word = Document(io.BytesIO(first.content))
         grid = next(table for table in word.tables
-                    if len(table.columns) == 3 and table._tr.xpath(".//wp:inline"))
+                    if len(table.columns) == 3 and table._tbl.xpath(".//wp:inline"))
         photo_rows = [row for row in grid.rows if row._tr.xpath(".//wp:inline")]
         assert len(photo_rows) == 2
         second = client.post(f"/api/inspections/{item_id}/report/docx")
