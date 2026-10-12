@@ -105,7 +105,10 @@ function Photos({ inspection, run, captureIssue, refresh, goIssues, goDimensions
     if (pageSaveLock.current) return Promise.resolve(false)
     pageSaveLock.current = true
     setPageSaving(true)
-    return run(() => api.patchInspection(inspection.id, { revision: inspection.revision, photo_pages: next }), message)
+    return run(async () => {
+      const latest = await api.inspection(inspection.id)
+      return api.patchInspection(inspection.id, { revision: latest.revision, photo_pages: next })
+    }, message)
       .finally(() => { pageSaveLock.current = false; setPageSaving(false) })
   }
   async function continueToSlots() {
@@ -221,9 +224,13 @@ function Photos({ inspection, run, captureIssue, refresh, goIssues, goDimensions
     <div className="capture-grid">{['PRODUCT_VIEW', 'DIMENSION', 'MC', 'GLOSS', 'ISSUE'].map((item) => <button key={item} type="button" onClick={() => quickCapture(item)}><span>＋</span>{sectionLabel(item)}</button>)}</div>
     <div className="upload-tools"><label>Section<select value={section} onChange={(event) => setSection(event.target.value)}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select></label>{section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <label>Issue<select value={issueId} onChange={(event) => setIssueId(event.target.value)}><option value="">Belum ditautkan</option>{inspection.issues.map((issue) => <option key={issue.id} value={issue.id}>{issue.defect_type}</option>)}</select></label>)}<button type="button" className="small-action" disabled={section === 'DIMENSION'} onClick={() => { uploadTarget.current = { section, issueId }; input.current?.click() }}>+ Tambah foto</button><button type="button" className="primary-action" disabled={!layouts || !pageableSections.includes(section)} title={!pageableSections.includes(section) ? 'Dimension dan Issue memakai susunan khusus.' : undefined} onClick={openWizard}>＋ Tambah halaman</button></div>
     {(section === 'DIMENSION' || inspection.measurements.some(item => item.category === 'DIMENSION') || inspection.photos.some(photo => photo.section === 'DIMENSION')) && <DimensionPhotos inspection={inspection} run={run} addCustom={goDimensions} askConfirm={askConfirm} />}
-    <input ref={input} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={(event) => {
+    <input ref={input} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={async (event) => {
       const files = event.target.files
-      if (files?.length) { const target = uploadTarget.current; void run(() => api.upload(inspection.id, target.section, files, target.issueId || undefined), `${files.length} foto tersimpan.`) }
+      if (files?.length) {
+        const target = uploadTarget.current
+        await run(() => api.upload(inspection.id, target.section, files, target.issueId || undefined), `${files.length} foto tersimpan.`)
+        await refresh()
+      }
       event.target.value = ''
     }} aria-label="Unggah atau ambil foto" />
     <input ref={slotFileInput} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={async (event) => {
@@ -237,17 +244,20 @@ function Photos({ inspection, run, captureIssue, refresh, goIssues, goDimensions
             const uploaded = await api.upload(inspection.id, targetPage.section, files)
             const first = uploaded[0]
             if (first) {
+              const latest = await api.inspection(inspection.id)
               const newPhotoId = first.id
-              const nextPage = {
-                ...targetPage,
-                photo_ids: targetPage.photo_ids.map((item, index) => index === targetSlot ? newPhotoId : item)
-              }
+              const latestPages = latest.photo_pages || photoPages
+              const nextPage = latestPages.map(item => item.id === targetPage.id ? {
+                ...item,
+                photo_ids: item.photo_ids.map((pId, index) => index === targetSlot ? newPhotoId : pId)
+              } : item)
               await api.patchInspection(inspection.id, {
-                revision: inspection.revision,
-                photo_pages: photoPages.map(item => item.id === targetPage.id ? nextPage : item)
+                revision: latest.revision,
+                photo_pages: nextPage
               })
             }
           }, 'Foto berhasil diunggah dan dimasukkan ke slot.')
+          await refresh()
         } finally {
           setSlotUploading(null)
           slotUploadTarget.current = null

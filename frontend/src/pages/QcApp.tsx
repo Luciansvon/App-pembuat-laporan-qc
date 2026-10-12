@@ -82,7 +82,10 @@ export default function QcApp() {
   const run = useCallback(async (action: () => Promise<unknown>, success = 'Tersimpan.'): Promise<boolean> => {
     setError(''); setMessage('Menyimpan…'); setSavingCount((count) => count + 1)
     try { await action(); await refreshCurrent(current?.id); setMessage(success); return true }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan'); return false }
+    catch (cause) {
+      if (current?.id) { await refreshCurrent(current.id).catch(() => {}) }
+      setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan'); return false
+    }
     finally { setSavingCount((count) => count - 1) }
   }, [current?.id, refreshCurrent])
   function navigate(target: View) { if (locked) return; setCurrent(null); setCreating(false); setView(target); setError(''); setMessage(''); setSearch(''); setStatusFilter('ALL') }
