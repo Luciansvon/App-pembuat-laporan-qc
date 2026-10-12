@@ -95,8 +95,8 @@ class InspectionPatch(StrictModel):
             for section, cols in self.photo_layout.items():
                 if section not in known:
                     raise ValueError(f"unknown photo section: {section}")
-                if not isinstance(cols, int) or not 1 <= cols <= 8:
-                    raise ValueError(f"layout for {section} must be 1-8 photos per row")
+                if not isinstance(cols, int) or not 1 <= cols <= 2:
+                    raise ValueError(f"layout for {section} must be 1-2 photos per row")
         return self
 
 

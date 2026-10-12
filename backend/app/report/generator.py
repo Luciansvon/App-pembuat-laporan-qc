@@ -201,7 +201,7 @@ def layout_cols(layout: dict | None, section: str) -> int:
         cols = int((layout or {}).get(section, 2))
     except (TypeError, ValueError, AttributeError):
         return 2
-    return min(8, max(1, cols))
+    return min(2, max(1, cols))
 
 
 def row_spans(cols: int, count: int) -> list[int]:
@@ -214,7 +214,7 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
                single_height_cm: float = 10, cols: int = 2) -> None:
     if not photos:
         return
-    cols = min(8, max(1, cols))
+    cols = min(2, max(1, cols))
     table = document.add_table(rows=0, cols=cols)
     photo_table_width(table, tuple(width_cm / cols for _ in range(cols)))
     if border:

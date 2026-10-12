@@ -61,17 +61,16 @@ def test_photo_bounds_and_odd_final_row(tmp_path: Path, count: int, kind: str) -
 
 
 @pytest.mark.parametrize("cols,count,expected_spans", [
-    (2, 2, [1, 1]), (3, 2, [2, 1]), (4, 2, [2, 2]),
-    (5, 3, [2, 2, 1]), (8, 1, [8]), (8, 8, [1] * 8),
+    (2, 2, [1, 1]), (2, 1, [2]), (1, 1, [1]),
 ])
 def test_row_spans_share_columns_evenly(cols: int, count: int, expected_spans: list[int]) -> None:
     assert row_spans(cols, count) == expected_spans
     assert sum(expected_spans) == cols
 
 
-@pytest.mark.parametrize("cols", [1, 3, 4, 8])
+@pytest.mark.parametrize("cols", [1, 2])
 def test_layout_cols_render_requested_columns(tmp_path: Path, cols: int) -> None:
-    count = 7
+    count = 5
     photos = []
     for index in range(count):
         path = tmp_path / f"{index}.jpg"
@@ -99,11 +98,11 @@ def test_layout_partial_row_merges_cells(tmp_path: Path) -> None:
         Image.new("RGB", (1200, 900), (60, 120, 90)).save(path)
         photos.append(InspectionPhoto(inspection_id="QA", section="PRODUCT_VIEW", file_path=path.name))
     document = Document()
-    photo_grid(document, photos, Settings(data_dir=tmp_path), cols=5)
-    row = [item for item in document.tables[0].rows if item._tr.xpath(".//wp:inline")][0]
-    assert row.cells[0]._tc is row.cells[1]._tc
-    assert row.cells[2]._tc is row.cells[3]._tc
-    assert row.cells[4]._tc is not row.cells[0]._tc
+    photo_grid(document, photos, Settings(data_dir=tmp_path), cols=2)
+    rows = [item for item in document.tables[0].rows if item._tr.xpath(".//wp:inline")]
+    assert len(rows) == 2
+    assert rows[0].cells[0]._tc is not rows[0].cells[1]._tc
+    assert rows[1].cells[0]._tc is rows[1].cells[1]._tc
 
 
 def test_layout_patch_validation(tmp_path: Path) -> None:
@@ -112,11 +111,11 @@ def test_layout_patch_validation(tmp_path: Path) -> None:
         item_id, revision = inspection["id"], inspection["revision"]
         assert inspection["photo_layout"] == {}
         good = client.patch(f"/api/inspections/{item_id}", json={
-            "revision": revision, "photo_layout": {"PRODUCT_VIEW": 3, "DIMENSION": 4}})
+            "revision": revision, "photo_layout": {"PRODUCT_VIEW": 2, "DIMENSION": 1}})
         assert good.status_code == 200, good.text
-        assert good.json()["photo_layout"] == {"PRODUCT_VIEW": 3, "DIMENSION": 4}
+        assert good.json()["photo_layout"] == {"PRODUCT_VIEW": 2, "DIMENSION": 1}
         revision = good.json()["revision"]
-        for bad in ({"PRODUCT_VIEW": 0}, {"PRODUCT_VIEW": 9}, {"NOPE": 2}):
+        for bad in ({"PRODUCT_VIEW": 0}, {"PRODUCT_VIEW": 3}, {"DIMENSION": 8}, {"NOPE": 2}):
             response = client.patch(f"/api/inspections/{item_id}", json={
                 "revision": revision, "photo_layout": bad})
             assert response.status_code == 422, response.text
@@ -132,17 +131,14 @@ def test_layout_flows_into_docx_and_stays_deterministic(tmp_path: Path) -> None:
             response = client.post(f"/api/inspections/{item_id}/photos", data={"section": "PRODUCT_VIEW"},
                 files=[("files", (f"view-{index}.jpg", image_bytes(), "image/jpeg"))])
             assert response.status_code == 201, response.text
-        revision = client.get(f"/api/inspections/{item_id}").json()["revision"]
-        assert client.patch(f"/api/inspections/{item_id}", json={
-            "revision": revision, "photo_layout": {"PRODUCT_VIEW": 3}}).status_code == 200
         assert client.post(f"/api/inspections/{item_id}/validate").json()["errors"] == []
         first = client.post(f"/api/inspections/{item_id}/report/docx")
         assert first.status_code == 200, first.text
         word = Document(io.BytesIO(first.content))
         grid = next(table for table in word.tables
-                    if len(table.columns) == 3 and table._tbl.xpath(".//wp:inline"))
+                    if len(table.columns) == 2 and table._tbl.xpath(".//wp:inline"))
         photo_rows = [row for row in grid.rows if row._tr.xpath(".//wp:inline")]
-        assert len(photo_rows) == 2
+        assert len(photo_rows) == 3
         second = client.post(f"/api/inspections/{item_id}/report/docx")
         assert second.content == first.content
 
@@ -159,12 +155,10 @@ def test_dimension_pair_follows_layout_columns(tmp_path: Path) -> None:
         assert response.status_code == 201, response.text
         revision = client.get(f"/api/inspections/{item_id}").json()["revision"]
         assert client.patch(f"/api/inspections/{item_id}", json={
-            "revision": revision, "photo_layout": {"DIMENSION": 4}}).status_code == 200
+            "revision": revision, "photo_layout": {"DIMENSION": 1}}).status_code == 200
         report = client.post(f"/api/inspections/{item_id}/report/docx")
         assert report.status_code == 200, report.text
         word = Document(io.BytesIO(report.content))
         table = next(table for table in word.tables if table.cell(0, 0).text.startswith("Length"))
-        assert len(table.columns) == 4
-        photo_row = [row for row in table.rows if row._tr.xpath(".//wp:inline")][0]
-        assert photo_row.cells[0]._tc is photo_row.cells[1]._tc
-        assert photo_row.cells[2]._tc is photo_row.cells[3]._tc
+        assert len(table.columns) == 1
+        assert len([row for row in table.rows if row._tr.xpath(".//wp:inline")]) == 2
