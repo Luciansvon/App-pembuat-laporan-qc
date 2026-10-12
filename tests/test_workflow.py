@@ -6,6 +6,8 @@ import io
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -92,6 +94,13 @@ def test_complete_inspection_generates_clean_word_and_persists(tmp_path: Path) -
         assert "Bima" in header
         assert "{{" not in header
         assert "QC   INSPECTION REPORT" in header
+        header_table = word.sections[0].header.tables[0]
+        assert header_table._tbl.tblPr.find(qn("w:tblW")).get(qn("w:w")) == str(Cm(18).twips)
+        assert header_table.cell(0, 0).paragraphs[0].runs[0].font.size == Pt(14)
+        dim_label = next(cell for row in header_table.rows for cell in row.cells if cell.text == "DIM(mm)")
+        assert dim_label.paragraphs[0].runs[0].font.size == Pt(12)
+        row_totals = [sum(cell.width.emu for cell in row._tr.tc_lst) for row in header_table.rows]
+        assert max(row_totals) - min(row_totals) <= len(header_table.rows) * len(header_table.columns)
         assert "Conclusion" in body
         assert "2 issue" not in body
         assert len(word.inline_shapes) == 9

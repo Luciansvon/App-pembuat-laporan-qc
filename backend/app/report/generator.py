@@ -81,42 +81,55 @@ def fill_header(document, inspection: Inspection, config: dict) -> None:
         values[f"DIM_{index}"] = number(inspection.product_dimensions.get(axis))
     for index, axis in enumerate(box_axes, 1):
         values[f"BOX_{index}"] = number(inspection.box_dimensions.get(axis))
+
+    def replace_placeholders(paragraph) -> bool:
+        if "{{" not in paragraph.text:
+            return False
+        for run in paragraph.runs:
+            if "{{" not in run.text:
+                continue
+            text = run.text
+            for key, value in values.items():
+                text = text.replace("{{" + key + "}}", value)
+            run.text = text
+        if "{{" in paragraph.text:
+            # Placeholder terbelah antar-run: bangun ulang sekali sebagai fallback.
+            replaced = paragraph.text
+            for key, value in values.items():
+                replaced = replaced.replace("{{" + key + "}}", value)
+            paragraph.text = replaced
+        return True
+
     for table in document.sections[0].header.tables:
-        # The source template has 18.38 cm cell widths on an 18 cm text area.
-        # Scale every merged cell as well as the grid so both edges align with the body.
+        # Template selebar ~18,38 cm pada area isi 18 cm. Skala SEKALI dari total
+        # grid agar kolom tetap segaris antar-baris; skala per-baris merusak
+        # kesejajaran vertikal.
         table.autofit = False
         grid_columns = list(table._tbl.tblGrid.gridCol_lst)
         grid_total = sum(column.w for column in grid_columns)
         for column in grid_columns:
             column.w = int(column.w * Cm(18).emu / grid_total)
         for row in table.rows:
-            cells = row._tr.tc_lst
-            row_total = sum(cell.width for cell in cells)
-            for cell in cells:
-                cell.width = int(cell.width * Cm(18).emu / row_total)
+            for cell in row._tr.tc_lst:
+                cell.width = int(cell.width * Cm(18).emu / grid_total)
         table_width = table._tbl.tblPr.find(qn("w:tblW"))
         if table_width is None:
             table_width = OxmlElement("w:tblW")
             table._tbl.tblPr.insert(0, table_width)
         table_width.set(qn("w:type"), "dxa")
         table_width.set(qn("w:w"), str(Cm(18).twips))
+        dynamic: set[int] = set()
         for row in table.rows:
             for cell in row.cells:
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 for paragraph in cell.paragraphs:
-                    if "{{" not in paragraph.text:
-                        continue
-                    replaced = paragraph.text
-                    for key, value in values.items():
-                        replaced = replaced.replace("{{" + key + "}}", value)
-                    paragraph.text = replaced
-                    paragraph_format(paragraph, 9)
-        for row_number, row in enumerate(table.rows):
+                    if replace_placeholders(paragraph):
+                        paragraph_format(paragraph, 9)
+        for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
                     paragraph.paragraph_format.space_before = Pt(0)
                     paragraph.paragraph_format.space_after = Pt(0)
-                    for run in paragraph.runs:
-                        run.font.size = Pt(10 if row_number == 0 else 9)
     remaining = "\n".join(cell.text for table in document.sections[0].header.tables for row in table.rows for cell in row.cells)
     if "{{" in remaining:
         raise ValueError("DOCX header has unresolved fields")
