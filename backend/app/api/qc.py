@@ -450,7 +450,7 @@ def patch_photo(item_id: str, data: PhotoPatch, request: Request,
             changes["dimension_slot"] = dimension_slots(session, photo.inspection_id, target_measurement, 1, photo.id)[0]
         changes["measurement_id"] = target_measurement
     else:
-        changes["dimension_slot"] = None
+        raise HTTPException(status_code=422, detail="Dimension photos require a dimension measurement")
     if changes.get("issue_id") and require(session, Issue, changes["issue_id"]).inspection_id != photo.inspection_id:
         raise HTTPException(status_code=422, detail="Issue belongs to another inspection")
     for key, value in changes.items():

@@ -7,7 +7,7 @@ import type { Defect, Inspection, Issue, Measurement, Photo, ReportPreview, Revi
 
 type Action = (task: () => Promise<unknown>, message?: string) => Promise<boolean>
 export type Tab = 'overview' | 'photos' | 'measurements' | 'tests' | 'issues' | 'review'
-const sections = ['PRODUCT_VIEW', 'PRODUCT_DETAIL', 'DRAWING', 'DIMENSION', 'MC', 'GLOSS', 'SWATCH', 'ISSUE', 'OTHER']
+  const sections = ['PRODUCT_VIEW', 'PRODUCT_DETAIL', 'DRAWING', 'DIMENSION', 'RADIUS', 'MC', 'GLOSS', 'GAP_SLIDE', 'CORNER', 'SWATCH', 'TRIAL_BACKREST', 'ISSUE', 'OTHER']
 const sectionLabel = (section: string) => section.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())
 const axes = ['L', 'W', 'D', 'H']
 const isDesktopView = typeof window !== 'undefined' && ('pywebview' in window || navigator.userAgent.includes('pywebview'))

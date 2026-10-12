@@ -95,6 +95,21 @@ def test_dimension_section_starts_on_new_page_after_product_view(tmp_path: Path)
         assert dimension_heading.paragraph_format.page_break_before is True
 
 
+def test_patch_dimension_without_measurement_is_rejected(tmp_path: Path) -> None:
+    with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
+        inspection = create_basic_inspection(client)['id']
+        photo = client.post(f'/api/inspections/{inspection}/photos', data={'section': 'PRODUCT_VIEW'},
+            files=[('files', ('view.jpg', image_bytes(), 'image/jpeg'))]).json()[0]
+        orphan = client.patch(f"/api/photos/{photo['id']}", json={'section': 'DIMENSION'})
+        assert orphan.status_code == 422, orphan.text
+        assert client.get(f'/api/inspections/{inspection}').json()['photos'][0]['section'] == 'PRODUCT_VIEW'
+        measurement = client.post(f'/api/inspections/{inspection}/measurements', json={
+            'category': 'DIMENSION', 'label': 'Length'}).json()
+        assert upload(client, inspection, measurement['id'], count=2).status_code == 201
+        linked = client.get(f'/api/inspections/{inspection}').json()['photos'][1]
+        assert client.patch(f"/api/photos/{linked['id']}", json={'caption': 'Sisi panjang'}).status_code == 200
+
+
 def test_old_photos_survive_migration_and_explicit_assignment(tmp_path: Path, monkeypatch) -> None:
     settings = Settings(data_dir=tmp_path)
     with TestClient(create_app(settings)) as client:

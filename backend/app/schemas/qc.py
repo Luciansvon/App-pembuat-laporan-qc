@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 InspectionType = Literal["INLINE", "FINAL", "PRE_SHIPMENT", "OTHER"]
-Section = Literal["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "ISSUE", "OTHER"]
+Section = Literal["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "ISSUE", "OTHER"]
 Category = Literal["DIMENSION", "MC", "GLOSS", "GAP", "RADIUS", "OTHER"]
 IssueStatus = Literal["OPEN", "REPAIRED", "ACCEPTED"]
 Status = Literal["DRAFT", "IN_PROGRESS", "REVIEW", "COMPLETED"]

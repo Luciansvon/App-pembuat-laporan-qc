@@ -123,6 +123,18 @@ def test_complete_inspection_generates_clean_word_and_persists(tmp_path: Path) -
         assert len(restored.json()["photos"]) == 9
 
 
+def test_poliform_extra_sections_accept_photos(tmp_path: Path) -> None:
+    with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
+        inspection = create_basic_inspection(client)
+        item_id = inspection["id"]
+        for section in ("PRODUCT_VIEW", "RADIUS", "GAP_SLIDE", "CORNER", "TRIAL_BACKREST"):
+            response = client.post(f"/api/inspections/{item_id}/photos", data={"section": section},
+                files=[("files", (f"{section}.jpg", image_bytes(), "image/jpeg"))])
+            assert response.status_code == 201, response.text
+        errors = client.post(f"/api/inspections/{item_id}/validate").json()["errors"]
+        assert errors == [], errors
+
+
 def test_guards_invalid_photo_and_destructive_operations(tmp_path: Path) -> None:
     with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
         inspection = create_basic_inspection(client)
