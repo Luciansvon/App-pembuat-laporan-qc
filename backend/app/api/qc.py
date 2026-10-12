@@ -207,7 +207,7 @@ def patch_inspection(item_id: str, data: InspectionPatch, session: Session = Dep
     changes = data.model_dump(exclude_unset=True)
     changes.pop("revision")
     for key, value in changes.items():
-        if value is None and key in {"po", "inspection_type", "date", "qc_name", "quantity", "product_dimensions", "box_dimensions", "status"}:
+        if value is None and key in {"po", "inspection_type", "date", "qc_name", "quantity", "product_dimensions", "box_dimensions", "photo_layout", "status"}:
             raise HTTPException(status_code=422, detail=f"{key} cannot be empty")
         setattr(item, key, value)
     item.revision += 1

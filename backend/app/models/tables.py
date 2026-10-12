@@ -53,6 +53,7 @@ class Inspection(SQLModel, table=True):
     inspected_quantity: int | None = None
     product_dimensions: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     box_dimensions: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    photo_layout: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     status: str = "DRAFT"
     conclusion: str | None = None
     communication_status: str | None = None

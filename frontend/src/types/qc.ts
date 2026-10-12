@@ -26,7 +26,7 @@ export interface Inspection {
   po: string; inspection_type: string; date: string; location: string | null;
   qc_name: string; quantity: number; aql: string | null;
   inspected_quantity: number | null; product_dimensions: Record<string, number>;
-  box_dimensions: Record<string, number>; status: string; conclusion: string | null;
+  box_dimensions: Record<string, number>; photo_layout: Record<string, number>; status: string; conclusion: string | null;
   communication_status: string | null; revision: number; updated_at: string;
   photos: Photo[]; issues: Issue[]; measurements: Measurement[]
 }

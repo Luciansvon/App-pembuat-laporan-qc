@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date as Date
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -80,12 +80,24 @@ class InspectionPatch(StrictModel):
     inspected_quantity: int | None = Field(default=None, ge=0)
     product_dimensions: dict[str, float] | None = None
     box_dimensions: dict[str, float] | None = None
+    photo_layout: dict[str, int] | None = None
     status: Status | None = None
     conclusion: str | None = None
     communication_status: str | None = None
     revision: int = Field(ge=1)
     _po = field_validator("po")(lambda v: nonblank(v) if v is not None else v)
     _qc = field_validator("qc_name")(lambda v: nonblank(v) if v is not None else v)
+
+    @model_validator(mode="after")
+    def valid_layout(self) -> "InspectionPatch":
+        if self.photo_layout is not None:
+            known = set(get_args(Section))
+            for section, cols in self.photo_layout.items():
+                if section not in known:
+                    raise ValueError(f"unknown photo section: {section}")
+                if not isinstance(cols, int) or not 1 <= cols <= 8:
+                    raise ValueError(f"layout for {section} must be 1-8 photos per row")
+        return self
 
 
 class MeasurementIn(StrictModel):

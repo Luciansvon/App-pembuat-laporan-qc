@@ -35,6 +35,13 @@ rasio asli tanpa crop. Pada issue, batas tinggi dibagi berdasarkan jumlah
 baris foto agar caption dan CAUSE/REPAIR/CAP tetap mendapat ruang. Tabel
 nested tetap memiliki paragraf pemisah supaya gambar tidak menutup garis ISSUE.
 
+QC memilih jumlah foto per baris untuk tiap section (1–8, default 2 mengikuti
+dokumen asli) lewat tab Photos; pilihan tersimpan per inspeksi sebagai
+`photo_layout` sehingga laporan deterministik untuk input sama. Baris terakhir
+yang belum penuh membagi kolom secara merata agar foto tetap sejajar.
+Caption tiap baris tetap terpusat dengan pemisah `|`, mengikuti pola label
+pada dokumen asli tetapi dengan perataan yang dirapikan.
+
 Setiap pengukuran DIMENSION (misalnya Length, Width, Depth, Height, atau label
 custom) memiliki tepat dua foto yang ditautkan ke ID pengukuran tersebut.
 Laporan menampilkan satu blok berlabel per ukuran, dengan kedua foto berdampingan.

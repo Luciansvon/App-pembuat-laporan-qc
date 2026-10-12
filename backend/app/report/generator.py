@@ -196,13 +196,27 @@ def insert_photo(paragraph, photo: InspectionPhoto, settings: Settings,
         ) from exc
 
 
+def layout_cols(layout: dict | None, section: str) -> int:
+    try:
+        cols = int((layout or {}).get(section, 2))
+    except (TypeError, ValueError, AttributeError):
+        return 2
+    return min(8, max(1, cols))
+
+
+def row_spans(cols: int, count: int) -> list[int]:
+    base, extra = divmod(cols, count)
+    return [base + (1 if index < extra else 0) for index in range(count)]
+
+
 def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
                *, width_cm: float = 18, border: bool = True,
-               single_height_cm: float = 10) -> None:
+               single_height_cm: float = 10, cols: int = 2) -> None:
     if not photos:
         return
-    table = document.add_table(rows=0, cols=2)
-    photo_table_width(table, (width_cm / 2, width_cm / 2))
+    cols = min(8, max(1, cols))
+    table = document.add_table(rows=0, cols=cols)
+    photo_table_width(table, tuple(width_cm / cols for _ in range(cols)))
     if border:
         borders = OxmlElement("w:tblBorders")
         for edge in ("top", "bottom", "left", "right"):
@@ -215,24 +229,28 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             edge_border.set(qn("w:val"), "nil")
             borders.append(edge_border)
         table._tbl.tblPr.append(borders)
-    for start in range(0, len(photos), 2):
-        pair = photos[start:start + 2]
+    for start in range(0, len(photos), cols):
+        chunk = photos[start:start + cols]
         row = table.add_row()
         for cell in row.cells:
-            cell.width = Cm(width_cm / 2)
+            cell.width = Cm(width_cm / cols)
             cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        if len(pair) == 1:
-            row.cells[0].merge(row.cells[1])
-        for index, photo in enumerate(pair):
-            cell = row.cells[index]
+        position = 0
+        for photo, span in zip(chunk, row_spans(cols, len(chunk))):
+            cell = row.cells[position]
+            if span > 1:
+                cell.merge(row.cells[position + span - 1])
             paragraph = cell.paragraphs[0]
             photo_paragraph(paragraph)
             insert_photo(paragraph, photo, settings,
                          cell_photo_width(cell),
                          single_height_cm if len(photos) == 1 else 5.8)
-        captions = [photo.caption.strip() for photo in pair if photo.caption and photo.caption.strip()]
+            position += span
+        captions = [photo.caption.strip() for photo in chunk if photo.caption and photo.caption.strip()]
         if captions:
-            caption_cell = table.add_row().cells[0].merge(table.rows[-1].cells[1])
+            caption_cell = table.add_row().cells[0]
+            if cols > 1:
+                caption_cell = caption_cell.merge(table.rows[-1].cells[cols - 1])
             caption_cell.text = "  |  ".join(captions)
             caption = caption_cell.paragraphs[0]
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -240,16 +258,19 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
 
 
 def dimension_photo_blocks(document, measurements: list[Measurement], photos: list[InspectionPhoto],
-                           settings: Settings, *, width_cm: float = 18, border: bool = True) -> None:
+                           settings: Settings, *, width_cm: float = 18, border: bool = True,
+                           cols: int = 2) -> None:
     for measurement in measurements:
         pair = sorted((photo for photo in photos if photo.measurement_id == measurement.id),
                       key=lambda photo: (photo.dimension_slot or 0, photo.id))
         if len(pair) != 2 or {photo.dimension_slot for photo in pair} != {1, 2}:
             raise ReportAssetUnavailable(f"Dimension {measurement.label} requires exactly 2 linked photos")
-        photo_grid(document, pair, settings, width_cm=width_cm, border=border)
+        photo_grid(document, pair, settings, width_cm=width_cm, border=border, cols=cols)
         table = document.tables[-1]
         label_row = table.add_row()
-        label_cell = label_row.cells[0].merge(label_row.cells[1])
+        label_cell = label_row.cells[0]
+        if cols > 1:
+            label_cell = label_cell.merge(label_row.cells[cols - 1])
         label_cell.text = measurement.label
         if any(value is not None for value in (measurement.value, measurement.value_min, measurement.value_max)):
             label_cell.text += " — " + value_text(measurement)
@@ -264,7 +285,8 @@ def dimension_photo_blocks(document, measurements: list[Measurement], photos: li
 
 
 def combined_section_block(document, sections: list[str], photos_by_section: dict[str, list[InspectionPhoto]],
-                           settings: Settings, dimensions: list[Measurement]) -> None:
+                           settings: Settings, dimensions: list[Measurement], layout: dict | None = None) -> None:
+    layout = layout or {}
     outer = document.add_table(rows=1, cols=1)
     outer.style = "Table Grid"
     outer.autofit = False
@@ -281,10 +303,11 @@ def combined_section_block(document, sections: list[str], photos_by_section: dic
         paragraph.add_run(SECTION_TITLES.get(section, section)).bold = True
         paragraph_format(paragraph, 9, True)
         if section == "DIMENSION":
-            dimension_photo_blocks(cell, dimensions, photos_by_section[section], settings, width_cm=17.2, border=False)
+            dimension_photo_blocks(cell, dimensions, photos_by_section[section], settings, width_cm=17.2, border=False,
+                                   cols=layout_cols(layout, section))
         else:
             photo_grid(cell, photos_by_section[section], settings, width_cm=17.2,
-                       border=False, single_height_cm=8.5)
+                       border=False, single_height_cm=8.5, cols=layout_cols(layout, section))
 
 
 def value_text(measurement: Measurement) -> str:
@@ -447,6 +470,7 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
                        for section in config["sections"]}
     combined = {block["sections"][0]: block for block in config.get("combined_blocks", [])}
     break_before = set(config.get("break_before", []))
+    layout = inspection.photo_layout or {}
     consumed: set[str] = set()
     started = False
     for section in config["sections"]:
@@ -460,19 +484,21 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
                          in zip(block["sections"], block["max_counts"], strict=True)):
             if started and any(name in break_before for name in block["sections"]):
                 document.add_page_break()
-            combined_section_block(document, block["sections"], sections_photos, settings, dimensions)
+            combined_section_block(document, block["sections"], sections_photos, settings, dimensions, layout)
             consumed.update(block["sections"])
             started = True
             continue
         if section == "DIMENSION":
             heading(document, SECTION_TITLES[section], page_break=started and section in break_before)
-            dimension_photo_blocks(document, dimensions, section_photos, settings)
+            dimension_photo_blocks(document, dimensions, section_photos, settings,
+                                   cols=layout_cols(layout, section))
             started = True
             continue
         for start in range(0, len(section_photos), config["max_photos_per_page"]):
             heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()),
                     page_break=started and section in break_before and start == 0)
-            photo_grid(document, section_photos[start:start + config["max_photos_per_page"]], settings)
+            photo_grid(document, section_photos[start:start + config["max_photos_per_page"]], settings,
+                       cols=layout_cols(layout, section))
         started = True
     measurement_table(document, measurements, session)
     for issue in issues:

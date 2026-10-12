@@ -25,7 +25,7 @@ def test_sourceless_android_migration_creates_domain_tables(tmp_path: Path, monk
     monkeypatch.setenv("QC_DATA_DIR", str(data_dir))
     config = Config(str(ROOT / "backend" / "alembic.ini"))
     config.set_main_option("script_location", str(migrations))
-    assert ScriptDirectory.from_config(config).get_current_head() == "8c91d2e4a760"
+    assert ScriptDirectory.from_config(config).get_current_head() == "c4f1a2b8d3e5"
     command.upgrade(config, "head")
 
     with sqlite3.connect(data_dir / "qc.sqlite3") as database:
