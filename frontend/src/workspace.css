@@ -228,8 +228,16 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .report-page-slot > img { display: block; width: 100%; height: clamp(115px, 17vw, 210px); object-fit: contain; background: #eef0eb; }
 .report-page-slot label { display: grid; gap: 6px; margin-top: 9px; color: #425e4b; font-size: 11px; font-weight: 700; }
 .report-page-slot select { width: 100%; min-width: 0; padding: 9px; border: 1px solid #aebfb0; background: #fff; color: #192720; font-size: 13px; }
-.report-page-slot-empty { min-height: clamp(115px, 17vw, 210px); display: grid; place-content: center; gap: 7px; border: 1px dashed #9aac9b; background: #f1f5ef; color: #516a57; text-align: center; }
-.report-page-slot-empty span { font-size: 25px; }
+button.report-page-slot-empty, .report-page-slot-empty { width: 100%; min-height: clamp(120px, 17vw, 210px); display: grid; place-content: center; gap: 6px; border: 2px dashed #8fa390; border-radius: 6px; background: #f2f6f0; color: #2d4c38; text-align: center; cursor: pointer; transition: all 0.15s ease-in-out; padding: 16px; }
+button.report-page-slot-empty:hover:not(:disabled) { border-color: #1e4b31; background: #e8f0e5; color: #163a25; box-shadow: 0 4px 12px rgba(30, 75, 49, .12); transform: translateY(-1px); }
+button.report-page-slot-empty:disabled { opacity: .6; cursor: wait; }
+.report-page-slot-empty span { font-size: 28px; line-height: 1; }
+.report-page-slot-empty strong { font-size: 13px; font-weight: 700; }
+.report-page-slot-empty small { font-size: 11px; color: #5d7363; }
+.report-page-slot-preview { position: relative; width: 100%; }
+.report-page-slot-preview > img { display: block; width: 100%; height: clamp(120px, 17vw, 210px); object-fit: contain; background: #eef0eb; border-radius: 4px; cursor: pointer; }
+.report-page-slot-clear { position: absolute; top: 6px; right: 6px; padding: 4px 8px; background: rgba(220, 38, 38, .88); color: #fff; border: 0; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 5px rgba(0, 0, 0, .25); transition: background .15s; }
+.report-page-slot-clear:hover { background: #b91c1c; }
 .report-page-caption { min-height: 18px; margin: 7px 2px 0; color: #506452; font-size: 12px; text-align: center; overflow-wrap: anywhere; }
 .photo-slot-heading { display: flex; justify-content: space-between; gap: 12px; margin: 15px 0 0; color: #435e49; font-size: 12px; }
 .photo-slot-heading span { color: #647567; text-align: right; }
@@ -274,3 +282,17 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .photo-slot-heading { display: block; }
   .photo-slot-heading span { display: block; text-align: left; margin-top: 5px; }
 }
+
+.confirm-modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(14, 25, 18, .55); backdrop-filter: blur(2px); padding: 16px; }
+.confirm-modal { width: min(440px, 100%); background: #fff; border: 1px solid #c9d5c8; border-radius: 12px; box-shadow: 0 20px 60px rgba(16, 28, 20, .28); padding: 22px 24px; display: grid; gap: 14px; }
+.confirm-modal-header { display: flex; align-items: center; gap: 14px; }
+.confirm-modal-icon { width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px; background: #fee2e2; color: #b91c1c; display: grid; place-items: center; }
+.confirm-modal-kicker { font-size: 10px; letter-spacing: .12em; font-weight: 700; color: #854d0e; text-transform: uppercase; }
+.confirm-modal-header h3 { margin: 3px 0 0; font-size: 18px; color: #1a2c20; letter-spacing: -.02em; }
+.confirm-modal-message { margin: 0; color: #4b5f50; font-size: 13.5px; line-height: 1.5; }
+.confirm-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; padding-top: 14px; border-top: 1px solid #eef2ec; }
+.confirm-btn-cancel { padding: 8px 16px; border: 1px solid #bcc9ba; border-radius: 6px; background: #f4f6f3; color: #2a3d30; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.confirm-btn-cancel:hover { background: #e7ece5; }
+.confirm-btn-danger { padding: 8px 18px; border: 0; border-radius: 6px; background: #b91c1c; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(185, 28, 28, .28); transition: all .15s; }
+.confirm-btn-danger:hover { background: #991b1b; }
+.confirm-btn-primary { padding: 8px 18px; border: 0; border-radius: 6px; background: #1e4b31; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }

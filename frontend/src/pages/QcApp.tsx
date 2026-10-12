@@ -5,6 +5,7 @@ import { getHealth } from '../services/health'
 import type { Customer, Defect, Inspection, Product } from '../types/qc'
 import Icon, { type IconName } from '../components/Icon'
 import FurnitureScene from '../components/FurnitureScene'
+import { ConfirmModal, type ConfirmOptions } from '../components/ConfirmModal'
 import NewInspection from './NewInspection'
 import Workspace, { type Tab } from './Workspace'
 import { isAndroidApp } from '../services/android'
@@ -43,6 +44,7 @@ export default function QcApp() {
   const [connection, setConnection] = useState<'checking' | 'connected' | 'unavailable'>('checking')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [confirmOptions, setConfirmOptions] = useState<ConfirmOptions | null>(null)
   const [savingCount, setSavingCount] = useState(0)
   const [pendingScopes, setPendingScopes] = useState<Set<string>>(() => new Set())
   const saving = savingCount > 0
@@ -78,7 +80,7 @@ export default function QcApp() {
     return () => { mounted = false }
   }, [])
   const run = useCallback(async (action: () => Promise<unknown>, success = 'Tersimpan.'): Promise<boolean> => {
-    setError(''); setMessage('Menyimpanâ€¦'); setSavingCount((count) => count + 1)
+    setError(''); setMessage('Menyimpan…'); setSavingCount((count) => count + 1)
     try { await action(); await refreshCurrent(current?.id); setMessage(success); return true }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMessage('Gagal menyimpan'); return false }
     finally { setSavingCount((count) => count - 1) }
@@ -92,7 +94,16 @@ export default function QcApp() {
         setError('Tunggu sampai perubahan tersimpan. Jika gagal, coba simpan atau batalkan perubahan dahulu.')
       } else if (current || creating || view !== 'home') {
         event.preventDefault()
-        if (!creating || window.confirm('Batalkan form inspeksi baru?')) navigate(current ? 'inspections' : 'home')
+        if (!creating) {
+          navigate(current ? 'inspections' : 'home')
+        } else {
+          setConfirmOptions({
+            title: 'Batalkan Form Inspeksi Baru?',
+            message: 'Apakah Anda yakin ingin membatalkan form inspeksi baru? Data yang sudah dimasukkan akan hilang.',
+            confirmText: 'Ya, Batalkan',
+            onConfirm: () => navigate(current ? 'inspections' : 'home')
+          })
+        }
       }
     }
     window.addEventListener('inspectra-back', back)
@@ -157,7 +168,8 @@ export default function QcApp() {
           {filtered.length ? <InspectionTable items={view === 'home' ? filtered.slice(0, 6) : filtered} onOpen={(id, tab) => void open(id, tab)} reports={view === 'reports'} /> : <div className="empty-state"><Icon name="inspection" /><h3>{search || statusFilter !== 'ALL' ? 'Tidak ada inspeksi yang cocok' : 'Inspeksi pertamamu dimulai di sini'}</h3><p>{search || statusFilter !== 'ALL' ? 'Ubah kata pencarian atau filter status.' : 'Buat customer, pilih produk, dan catat hasil pemeriksaan.'}</p>{!search && statusFilter === 'ALL' && <button className="primary-action" onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}</div>}
         </section>{view === 'home' && <div className="workflow-note"><Icon name="inspection" /><div><strong>Dari lantai produksi ke laporan</strong><span>Identitas â†’ Foto â†’ Ukuran â†’ Test â†’ Temuan â†’ Review</span></div><span>6 tahap</span></div>}</div>
         {view === 'home' && <aside className="dashboard-aside"><article className="report-promo"><div><span className="section-kicker">LAPORAN QC</span><h2>Detail yang jelas.<br />Laporan yang rapi.</h2><p>Catat temuan, periksa tiap halaman, lalu simpan sebagai Word.</p></div><FurnitureScene /><button className="primary-action" onClick={startNew}>Mulai inspeksi <Icon name="arrow" /></button></article><article className="local-note"><Icon name="database" /><div><strong>Data tersimpan lokal</strong><p>Inspeksi, foto, dan laporan tetap di perangkat ini. Siap digunakan tanpa internet.</p></div></article></aside>}</div>}</>}
-      <footer className="app-footer"><span>Inspectra Â· Furniture QC workspace</span><span><span className={`status-dot ${connection}`} />{connection === 'connected' ? 'Penyimpanan terhubung' : 'Menunggu koneksi'}</span></footer>
+      <footer className="app-footer"><span>Inspectra · Furniture QC workspace</span><span><span className={`status-dot ${connection}`} />{connection === 'connected' ? 'Penyimpanan terhubung' : 'Menunggu koneksi'}</span></footer>
     </main></div>
+    <ConfirmModal options={confirmOptions} onClose={() => setConfirmOptions(null)} />
   </div>
 }
