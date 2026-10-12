@@ -1,19 +1,18 @@
 # Inspectra
 
 Aplikasi lokal untuk mencatat inspeksi furnitur dan membuat laporan Word.
-v0.1.2 menjalankan alur customer → produk → inspeksi → foto/pengukuran/issue → review
-→ DOCX, tanpa layanan AI atau cloud saat dipakai di laptop QC.
+v0.1.3 menambahkan dua foto per ukuran dimension pada rilis Windows. APK Android
+publik saat ini masih v0.1.2. Alur inspeksi tetap lokal, tanpa layanan AI atau
+cloud saat dipakai di laptop QC.
 
 ## Unduh versi beta
 
-[Rilis v0.1.2-beta.1](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.2-beta.1)
-menyediakan paket sesuai perangkat:
-
 | Perangkat | Berkas | Cara pakai |
 | --- | --- | --- |
-| Windows x64 | `Inspectra.exe` | Unduh lalu jalankan; portable tanpa installer |
-| HP Android ARM64, Android 7+ | `Inspectra-0.1.2-arm64.apk` | Pasang APK di HP; timpa instalasi lama untuk mempertahankan data |
-| Verifikasi unduhan | `SHA256SUMS.txt`, `Inspectra-artifact-manifest.json` | Cocokkan SHA-256 dengan berkas yang diunduh |
+| Windows x64 | [`Inspectra.exe` v0.1.3](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.3-desktop-beta.1) | Unduh lalu jalankan; portable tanpa installer |
+| HP Android ARM64, Android 7+ | [`Inspectra-0.1.2-arm64.apk`](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.2-beta.1) | Pasang APK; timpa instalasi lama untuk mempertahankan data |
+| Verifikasi unduhan Windows | [`SHA256SUMS.txt` dan manifest v0.1.3](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.3-desktop-beta.1) | Cocokkan hash EXE |
+| Verifikasi unduhan Android | [`SHA256SUMS.txt` dan manifest v0.1.2](https://github.com/Luciansvon/App-pembuat-laporan-qc/releases/tag/v0.1.2-beta.1) | Cocokkan hash APK |
 
 EXE belum ditandatangani digital. APK memakai signing debug Inspectra yang
 stabil untuk beta, bukan signing produksi. Jangan uninstall APK saat memperbarui
@@ -21,11 +20,11 @@ jika ingin mempertahankan database dan foto di HP.
 
 ## Foto adaptif
 
-Source v0.1.3 menambahkan **dua foto per ukuran dimension**: Length, Width,
+**Rilis Windows v0.1.3** menambahkan dua foto per ukuran dimension: Length, Width,
 Depth, Height, dan label lain masing-masing mempunyai pasangan sendiri.
 Tambahkan ukuran di Photos atau Measurement, lalu isi kedua slot fotonya.
 Foto dimension lama tetap ada dan perlu dipilih ukurannya; DOCX/preview ditahan
-jika pasangan belum lengkap. Paket publik pada tautan di atas masih v0.1.2-beta.1.
+jika pasangan belum lengkap. APK publik belum menyertakan perubahan ini.
 
 Foto menyesuaikan jumlah dan ruang sel tabel, tetap proporsional tanpa crop.
 Susunan 1–6 foto: **1**, **2**, **2+1**, **2+2**, **2+2+1**, **2+2+2**.
