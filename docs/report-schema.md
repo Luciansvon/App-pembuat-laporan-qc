@@ -35,14 +35,26 @@ rasio asli tanpa crop. Pada issue, batas tinggi dibagi berdasarkan jumlah
 baris foto agar caption dan CAUSE/REPAIR/CAP tetap mendapat ruang. Tabel
 nested tetap memiliki paragraf pemisah supaya gambar tidak menutup garis ISSUE.
 
-QC memilih jumlah foto per baris untuk tiap section (1–2, default 2 mengikuti
-dokumen asli) lewat tab Photos; pilihan tersimpan per inspeksi sebagai
-`photo_layout` sehingga laporan deterministik untuk input sama. Tiap section
-foto mengalir dalam satu tabel panjang (maks 2 kesamping, memanjang ke bawah
+Inspeksi lama mempertahankan pilihan `photo_layout` per section (1–2 kolom,
+default 2), sehingga laporan lama tetap deterministik. Foto yang belum disusun
+ke halaman khusus mengalir dalam satu tabel panjang (maks 2 kesamping,
+memanjang ke bawah
 mengikuti halaman Word) — tidak dipotong per jumlah foto. Baris terakhir
 yang belum penuh membagi kolom secara merata agar foto tetap sejajar.
 Caption tiap baris tetap terpusat dengan pemisah `|`, mengikuti pola label
 pada dokumen asli tetapi dengan perataan yang dirapikan.
+
+QC dapat menambahkan halaman foto dari katalog `templates/photo-layouts.json`.
+Template `2/2`, `2/4`, `2/6`, dan `2/8` masing-masing menyediakan dua kolom
+dengan jumlah slot yang dinyatakan kode; template `1/1` menyediakan satu foto
+lebar untuk Drawing/detail. Tiap slot menunjuk ke satu foto milik inspeksi dan
+section yang sama, dan satu foto tidak boleh mengisi beberapa slot. Caption
+tetap menjadi milik foto dan dirender tepat di bawah slotnya. Tabel halaman
+selebar area cetak 18 cm, rata tengah, tanpa crop, dengan batas tinggi gambar
+berbeda per template agar 2/8 tetap muat tanpa menekan semua layout menjadi
+ukuran kecil. Issue dan Dimension tetap memakai alur khusus masing-masing.
+Halaman dapat diurutkan ulang; slot yang dihapus fotonya menjadi kosong dan
+preflight menahan pembuatan DOCX sampai semua slot terisi kembali.
 
 Setiap pengukuran DIMENSION (misalnya Length, Width, Depth, Height, atau label
 custom) memiliki tepat dua foto yang ditautkan ke ID pengukuran tersebut.

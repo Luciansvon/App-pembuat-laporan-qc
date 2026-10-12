@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "grid-2",
+      "code": "2/2",
+      "title": "Dua foto",
+      "category": "Tampak & CAD",
+      "description": "Sepasang foto besar, masing-masing dengan caption.",
+      "columns": 2,
+      "rows": 1,
+      "photo_count": 2,
+      "max_photo_height_cm": 9.5,
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER"]
+    },
+    {
+      "id": "grid-4",
+      "code": "2/4",
+      "title": "Empat foto",
+      "category": "Tampak & CAD",
+      "description": "2 kolom × 2 baris. Foto tetap lebar dan caption tidak digabung.",
+      "columns": 2,
+      "rows": 2,
+      "photo_count": 4,
+      "max_photo_height_cm": 7.0,
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER"]
+    },
+    {
+      "id": "grid-6",
+      "code": "2/6",
+      "title": "Enam foto",
+      "category": "Tampak & CAD",
+      "description": "2 kolom × 3 baris dengan ruang caption per foto.",
+      "columns": 2,
+      "rows": 3,
+      "photo_count": 6,
+      "max_photo_height_cm": 5.4,
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER"]
+    },
+    {
+      "id": "grid-8",
+      "code": "2/8",
+      "title": "Delapan foto",
+      "category": "Tampak & CAD",
+      "description": "2 kolom × 4 baris; setiap foto tetap proporsional dan punya caption sendiri.",
+      "columns": 2,
+      "rows": 4,
+      "photo_count": 8,
+      "max_photo_height_cm": 4.6,
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER"]
+    },
+    {
+      "id": "single-wide",
+      "code": "1/1",
+      "title": "Satu foto lebar",
+      "category": "Detail & CAD",
+      "description": "Satu slot lebar untuk CAD atau detail yang perlu dibaca jelas.",
+      "columns": 1,
+      "rows": 1,
+      "photo_count": 1,
+      "max_photo_height_cm": 16.0,
+      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "OTHER"]
+    }
+  ]
+}

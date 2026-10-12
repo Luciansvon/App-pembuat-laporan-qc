@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import CheckConstraint, Column, Index, JSON, UniqueConstraint
@@ -54,6 +55,7 @@ class Inspection(SQLModel, table=True):
     product_dimensions: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     box_dimensions: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     photo_layout: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    photo_pages: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     status: str = "DRAFT"
     conclusion: str | None = None
     communication_status: str | None = None

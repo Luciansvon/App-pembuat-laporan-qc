@@ -69,6 +69,20 @@ class InspectionIn(StrictModel):
     _qc = field_validator("qc_name")(nonblank)
 
 
+class PhotoPageIn(StrictModel):
+    id: str = Field(min_length=1, max_length=80)
+    section: Section
+    template_id: str = Field(min_length=1, max_length=80)
+    photo_ids: list[str | None] = Field(min_length=1, max_length=8)
+
+    @model_validator(mode="after")
+    def unique_photos(self) -> "PhotoPageIn":
+        photo_ids = [photo_id for photo_id in self.photo_ids if photo_id]
+        if len(photo_ids) != len(set(photo_ids)):
+            raise ValueError("a photo can only fill one slot on a page")
+        return self
+
+
 class InspectionPatch(StrictModel):
     po: str | None = Field(default=None, max_length=200)
     inspection_type: InspectionType | None = None
@@ -81,6 +95,7 @@ class InspectionPatch(StrictModel):
     product_dimensions: dict[str, float] | None = None
     box_dimensions: dict[str, float] | None = None
     photo_layout: dict[str, int] | None = None
+    photo_pages: list["PhotoPageIn"] | None = None
     status: Status | None = None
     conclusion: str | None = None
     communication_status: str | None = None
@@ -97,7 +112,16 @@ class InspectionPatch(StrictModel):
                     raise ValueError(f"unknown photo section: {section}")
                 if not isinstance(cols, int) or not 1 <= cols <= 2:
                     raise ValueError(f"layout for {section} must be 1-2 photos per row")
+        if self.photo_pages is not None:
+            page_ids = [page.id for page in self.photo_pages]
+            if len(page_ids) != len(set(page_ids)):
+                raise ValueError("photo page IDs must be unique")
+            photo_ids = [photo_id for page in self.photo_pages for photo_id in page.photo_ids if photo_id]
+            if len(photo_ids) != len(set(photo_ids)):
+                raise ValueError("a photo can only fill one page slot")
         return self
+
+
 
 
 class MeasurementIn(StrictModel):

@@ -74,7 +74,7 @@ Hash referensi dicatat untuk audit; file asli tidak dibaca saat pembuatan lapora
 | --- | --- |
 | Customer | UUID, kode unik, nama |
 | Product | Customer FK, UUID, standar dimensi opsional, label axis fleksibel |
-| Inspection | UUID, nomor unik `QC-YYYYMMDD-XXX`, product/customer FK, snapshot header, PO string, ISO date, location, QC, quantity, AQL value/label, status |
+| Inspection | UUID, nomor unik `QC-YYYYMMDD-XXX`, product/customer FK, snapshot header, PO string, ISO date, location, QC, quantity, AQL value/label, status, per-section photo layout and ordered photo pages |
 | Measurement | Inspection FK, kategori DIMENSION/MC/GLOSS/GAP/RADIUS/OTHER, label, actual/range/standar/toleransi terpisah, unit opsional, result INFO default |
 | TestReading | Measurement FK, value, optional photo FK dari inspection sama, sortOrder |
 | InspectionPhoto | Inspection FK, section, relative path, caption, sortOrder, optional issue FK; foto DIMENSION mempunyai measurement FK dari inspection sama dan slot 1/2 unik |
@@ -91,6 +91,10 @@ Revisi `8c91d2e4a760` menambahkan relasi foto dimension dan dua slot per ukuran
 tanpa membangun ulang tabel foto. Foto lama tetap ada dan belum ditautkan;
 QC memilih ukuran secara eksplisit. Pengukuran dimension membutuhkan dua foto
 sebelum DOCX/preview dapat dibuat. Reading aktual tidak dibuat dari jumlah foto.
+Revisi `d5e6f7a8b9c0` menambahkan JSON terstruktur `photo_pages` pada inspeksi.
+Setiap slot divalidasi server terhadap katalog layout dan foto di inspeksi yang
+sama. Katalog layout dipaketkan bersama EXE; foto dan caption tetap disimpan di
+domain photo, sementara urutan slot halaman menjadi konfigurasi inspeksi.
 
 ## Storage dan backup
 

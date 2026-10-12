@@ -13,13 +13,14 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Pt, RGBColor
+from docx.shared import Cm, Emu, Pt, RGBColor
 from fastapi import HTTPException
 from PIL import Image
 from sqlmodel import Session, select
 
 from app.core.config import RESOURCE_ROOT, Settings
 from app.models.tables import Inspection, InspectionPhoto, Issue, Measurement, TestReading
+from app.report.photo_layouts import photo_layout_by_id
 from app.services.storage import inspection_dir, photo_path
 
 TEMPLATE_DIR = RESOURCE_ROOT / "templates"
@@ -146,6 +147,15 @@ PHOTO_PADDING_CM = 0.12
 PHOTO_PARENT_PADDING_CM = 0.20
 
 
+def center_page_margins(document: Document) -> None:
+    """Center the printable area without changing its total width."""
+    for section in document.sections:
+        side_margin_total = int(section.left_margin) + int(section.right_margin)
+        centered_margin = Emu((side_margin_total + 1) // 2)
+        section.left_margin = centered_margin
+        section.right_margin = centered_margin
+
+
 def photo_table_width(table, widths_cm: tuple[float, ...]) -> None:
     """Keep the grid, preferred width and cell padding in agreement for Word."""
     table.autofit = False
@@ -256,6 +266,57 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             caption = caption_cell.paragraphs[0]
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph_format(caption, 8, True)
+
+
+def template_photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
+                        layout: dict, *, width_cm: float = 18) -> None:
+    """Render the selected fixed-slot page while retaining one caption per photo."""
+    columns = layout["columns"]
+    if len(photos) != layout["photo_count"]:
+        raise ReportAssetUnavailable("Photo page does not have every required photo slot filled")
+    widths = tuple(width_cm / columns for _ in range(columns))
+    table = document.add_table(rows=0, cols=columns)
+    photo_table_width(table, widths)
+    margins = table._tbl.tblPr.find(qn("w:tblCellMar"))
+    if margins is not None:
+        for edge in ("top", "bottom"):
+            margin = margins.find(qn(f"w:{edge}"))
+            if margin is not None:
+                margin.set(qn("w:w"), str(Cm(0.03).twips))
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "bottom", "left", "right"):
+        border = OxmlElement(f"w:{edge}")
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), "4")
+        borders.append(border)
+    for edge in ("insideH", "insideV"):
+        border = OxmlElement(f"w:{edge}")
+        border.set(qn("w:val"), "nil")
+        borders.append(border)
+    table._tbl.tblPr.append(borders)
+    for start in range(0, len(photos), columns):
+        chunk = photos[start:start + columns]
+        photo_row = table.add_row()
+        caption_row = table.add_row()
+        for cell in photo_row.cells:
+            cell.width = Cm(width_cm / columns)
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        for cell in caption_row.cells:
+            cell.width = Cm(width_cm / columns)
+            cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        for index, photo in enumerate(chunk):
+            paragraph = photo_row.cells[index].paragraphs[0]
+            photo_paragraph(paragraph)
+            paragraph.paragraph_format.keep_with_next = True
+            insert_photo(paragraph, photo, settings,
+                         max_width_cm=cell_photo_width(photo_row.cells[index]),
+                         max_height_cm=layout["max_photo_height_cm"])
+            caption = caption_row.cells[index].paragraphs[0]
+            caption.text = (photo.caption or "").strip()
+            caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph_format(caption, 8, True)
+        for row in (photo_row, caption_row):
+            row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
 
 
 def dimension_photo_blocks(document, measurements: list[Measurement], photos: list[InspectionPhoto],
@@ -456,6 +517,7 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
     if not ready:
         raise ValueError("DOCX template is not ready")
     document = Document(TEMPLATE_DIR / config["output_template"])
+    center_page_margins(document)
     if document.paragraphs and not document.paragraphs[0].text.strip():
         p_el = document.paragraphs[0]._element
         p_el.getparent().remove(p_el)
@@ -467,7 +529,10 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
     dimensions = [measurement for measurement in measurements if measurement.category == "DIMENSION"]
     issues = session.exec(select(Issue).where(Issue.inspection_id == inspection.id)
         .order_by(Issue.sort_order, Issue.id)).all()
-    sections_photos = {section: [photo for photo in photos if photo.section == section and photo.issue_id is None]
+    assigned_photo_ids = {photo_id for page in inspection.photo_pages or []
+                          for photo_id in page.get("photo_ids", []) if photo_id}
+    sections_photos = {section: [photo for photo in photos if photo.section == section
+                                 and photo.issue_id is None and photo.id not in assigned_photo_ids]
                        for section in config["sections"]}
     combined = {block["sections"][0]: block for block in config.get("combined_blocks", [])}
     break_before = set(config.get("break_before", []))
@@ -499,6 +564,18 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
                 page_break=started and section in break_before)
         photo_grid(document, section_photos, settings,
                    cols=layout_cols(layout, section))
+        started = True
+    photos_by_id = {photo.id: photo for photo in photos}
+    for index, page in enumerate(inspection.photo_pages or [], start=1):
+        layout_config = photo_layout_by_id(page["template_id"])
+        if layout_config is None:
+            raise ReportAssetUnavailable("Selected photo page layout is unavailable")
+        page_photos = [photos_by_id[photo_id] for photo_id in page["photo_ids"]]
+        if started:
+            document.add_page_break()
+        title = SECTION_TITLES.get(page["section"], page["section"].replace("_", " ").title())
+        heading(document, f"{title} · {layout_config['code']} · Page {index}")
+        template_photo_grid(document, page_photos, settings, layout_config)
         started = True
     measurement_table(document, measurements, session)
     for issue in issues:

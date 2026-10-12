@@ -29,6 +29,7 @@ try {
         'backend\app\report\render_word.ps1;backend\app\report',
         'frontend\dist;frontend\dist',
         'templates\catalog.json;templates',
+        'templates\photo-layouts.json;templates',
         'templates\poliform.docx;templates',
         'templates\rh.docx;templates',
         'templates\default.docx;templates'

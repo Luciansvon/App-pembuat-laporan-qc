@@ -3,7 +3,7 @@ import { api } from '../services/api'
 import DimensionPhotos, { DimensionPair } from '../components/DimensionPhotos'
 import { isAndroidApp } from '../services/android'
 import { useAutosave } from '../hooks/useAutosave'
-import type { Defect, Inspection, Issue, Measurement, Photo, ReportPreview, Review } from '../types/qc'
+import type { Defect, Inspection, Issue, Measurement, Photo, PhotoLayoutCatalog, PhotoLayoutTemplate, PhotoPage, ReportPreview, Review } from '../types/qc'
 
 type Action = (task: () => Promise<unknown>, message?: string) => Promise<boolean>
 export type Tab = 'overview' | 'photos' | 'measurements' | 'tests' | 'issues' | 'review'
@@ -74,9 +74,87 @@ function Photos({ inspection, run, captureIssue, refresh, goIssues, goDimensions
   const [issueId, setIssueId] = useState(captureIssue || '')
   const [preview, setPreview] = useState<string | null>(null)
   const [dragged, setDragged] = useState<string | null>(null)
+  const [layouts, setLayouts] = useState<PhotoLayoutCatalog | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardStep, setWizardStep] = useState<'layout' | 'slots'>('layout')
+  const [wizardSection, setWizardSection] = useState('PRODUCT_VIEW')
+  const [category, setCategory] = useState('Semua')
+  const [templateId, setTemplateId] = useState<string | null>(null)
+  const [activePageId, setActivePageId] = useState<string | null>(null)
+  const [pageSaving, setPageSaving] = useState(false)
+  const pageSaveLock = useRef(false)
+  const photoPages = inspection.photo_pages || []
+  useEffect(() => { void api.photoLayouts().then(setLayouts).catch(() => setLayouts(null)) }, [])
   useEffect(() => { if (captureIssue) { setSection('ISSUE'); setIssueId(captureIssue) } }, [captureIssue])
   const ordered = inspection.photos.filter(photo => photo.section !== 'DIMENSION' || !photo.measurement_id).sort((left, right) => left.sort_order - right.sort_order || left.id.localeCompare(right.id))
+  const pageableSections = (layouts?.templates || []).flatMap(layout => layout.sections).filter((item, index, all) => all.indexOf(item) === index)
+  const categoryOptions = ['Semua', ...((layouts?.templates || []).map(layout => layout.category).filter((item, index, all) => all.indexOf(item) === index))]
+  const visibleLayouts = (layouts?.templates || []).filter(layout => layout.sections.includes(wizardSection) && (category === 'Semua' || layout.category === category))
+  const getLayout = (id: string) => layouts?.templates.find(layout => layout.id === id)
   function quickCapture(nextSection: string) { setSection(nextSection); if (nextSection === 'DIMENSION') return; if (nextSection !== 'ISSUE') setIssueId(''); uploadTarget.current = { section: nextSection, issueId: nextSection === 'ISSUE' ? issueId : '' }; input.current?.click() }
+  function openWizard() {
+    const startSection = pageableSections.includes(section) ? section : 'PRODUCT_VIEW'
+    setWizardSection(startSection); setCategory('Semua'); setTemplateId(null); setActivePageId(null)
+    setWizardStep('layout'); setWizardOpen(true)
+  }
+  function patchPhotoPages(next: PhotoPage[], message: string) {
+    if (pageSaveLock.current) return Promise.resolve(false)
+    pageSaveLock.current = true
+    setPageSaving(true)
+    return run(() => api.patchInspection(inspection.id, { revision: inspection.revision, photo_pages: next }), message)
+      .finally(() => { pageSaveLock.current = false; setPageSaving(false) })
+  }
+  async function continueToSlots() {
+    const layout = templateId ? getLayout(templateId) : undefined
+    if (!layout) return
+    const previousPage = activePageId ? photoPages.find(page => page.id === activePageId) : undefined
+    const newPage: PhotoPage = { id: previousPage?.id || globalThis.crypto?.randomUUID?.() || `page-${Date.now()}`, section: wizardSection, template_id: layout.id, photo_ids: Array.from({ length: layout.photo_count }, (_, index) => {
+      const previousPhotoId = previousPage?.photo_ids[index] || null
+      return previousPhotoId && inspection.photos.find(photo => photo.id === previousPhotoId)?.section === wizardSection ? previousPhotoId : null
+    }) }
+    const next = activePageId
+      ? photoPages.map(page => page.id === activePageId ? newPage : page)
+      : [...photoPages, newPage]
+    const saved = await patchPhotoPages(next, 'Halaman foto dibuat.')
+    if (saved) { setActivePageId(newPage.id); setWizardStep('slots') }
+  }
+  function changeSlot(page: PhotoPage, slot: number, photoId: string) {
+    const nextPage = { ...page, photo_ids: page.photo_ids.map((item, index) => index === slot ? (photoId || null) : item) }
+    void patchPhotoPages(photoPages.map(item => item.id === page.id ? nextPage : item), 'Pilihan foto dan caption tersimpan di halaman.')
+  }
+  function removePage(page: PhotoPage) {
+    if (!window.confirm('Hapus layout halaman ini? Foto di galeri tetap tersimpan.')) return
+    void patchPhotoPages(photoPages.filter(item => item.id !== page.id), 'Halaman foto dihapus.')
+    if (activePageId === page.id) { setWizardOpen(false); setActivePageId(null) }
+  }
+  function movePage(index: number, delta: -1 | 1) {
+    const nextIndex = index + delta
+    if (nextIndex < 0 || nextIndex >= photoPages.length) return
+    const next = [...photoPages]
+    ;[next[index], next[nextIndex]] = [next[nextIndex]!, next[index]!]
+    void patchPhotoPages(next, 'Urutan halaman diperbarui.')
+  }
+  function renderPageSlots(page: PhotoPage, layout: PhotoLayoutTemplate, showTitle = false) {
+    const usedElsewhere = new Set(photoPages.filter(item => item.id !== page.id).flatMap(item => item.photo_ids).filter((id): id is string => Boolean(id)))
+    return <>
+      {showTitle && <div className="photo-slot-heading"><strong>Pilih foto untuk {layout.code}</strong><span>{page.photo_ids.filter(Boolean).length}/{layout.photo_count} slot · caption mengikuti foto di galeri</span></div>}
+      <div className="report-page-slots" style={{ gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))` }}>
+        {page.photo_ids.map((photoId, slot) => {
+          const photo = inspection.photos.find(item => item.id === photoId)
+          const usedInOtherSlots = new Set(page.photo_ids.filter((item, index): item is string => index !== slot && Boolean(item)))
+          const candidates = inspection.photos.filter(item => item.section === page.section && !usedElsewhere.has(item.id) && !usedInOtherSlots.has(item.id))
+          return <article className={`report-page-slot${photo ? ' filled' : ''}`} key={`${page.id}-${slot}`}>
+            {photo ? <img src={`/api/photos/${photo.id}/file?v=${inspection.revision}`} alt={photo.caption || `Foto ${slot + 1}`} /> : <div className="report-page-slot-empty"><span>＋</span>Foto {slot + 1}</div>}
+            <label>Slot {slot + 1}<select aria-label={`Foto slot ${slot + 1} ${layout.code}`} disabled={pageSaving} value={photoId || ''} onChange={event => changeSlot(page, slot, event.target.value)}>
+              <option value="">Pilih foto…</option>
+              {candidates.map(item => <option key={item.id} value={item.id}>{item.caption?.trim() || `${sectionLabel(item.section)} · ${item.sort_order}`}</option>)}
+            </select></label>
+            <p className="report-page-caption">{photo?.caption?.trim() || 'Caption belum diisi'}</p>
+          </article>
+        })}
+      </div>
+    </>
+  }
   async function reorder(source: Photo, target: Photo) {
     if (source.id === target.id) return
     const saved = await run(async () => {
@@ -96,19 +174,39 @@ function Photos({ inspection, run, captureIssue, refresh, goIssues, goDimensions
     // hanya untuk meluruskan tampilan bila gagal.
     if (!saved) await refresh()
   }
-  return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">02 / PHOTOS</span><h2>Foto inspeksi</h2></div><p>Caption tampil di tengah bawah satu foto atau sepasang foto pada laporan Word. JPG, PNG, WebP; maksimum 20 MB per file.</p></div>
+  return <div className="field-card"><div className="field-card-heading"><div><span className="section-kicker">02 / PHOTOS</span><h2>Foto inspeksi</h2></div><p>Atur foto per halaman laporan. Caption tetap menempel pada foto dan tampil tepat di bawahnya saat dicetak. JPG, PNG, WebP; maksimum 20 MB per file.</p></div>
     <div className="capture-grid">{['PRODUCT_VIEW', 'DIMENSION', 'MC', 'GLOSS', 'ISSUE'].map((item) => <button key={item} type="button" onClick={() => quickCapture(item)}><span>＋</span>{sectionLabel(item)}</button>)}</div>
-    <div className="upload-tools"><label>Section<select value={section} onChange={(event) => setSection(event.target.value)}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select></label><label>Layout laporan<select value={inspection.photo_layout?.[section] ?? 2} onChange={(event) => void run(() => api.patchInspection(inspection.id, { revision: inspection.revision, photo_layout: { ...(inspection.photo_layout || {}), [section]: Number(event.target.value) } }), 'Layout laporan tersimpan.')} aria-label={`Jumlah foto per baris untuk ${sectionLabel(section)}`}>{[1, 2].map((count) => <option value={count} key={count}>{count} foto/baris</option>)}</select></label>{section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <label>Issue<select value={issueId} onChange={(event) => setIssueId(event.target.value)}><option value="">Belum ditautkan</option>{inspection.issues.map((issue) => <option key={issue.id} value={issue.id}>{issue.defect_type}</option>)}</select></label>)}<button type="button" className="small-action" disabled={section === 'DIMENSION'} onClick={() => { uploadTarget.current = { section, issueId }; input.current?.click() }}>+ Tambah foto</button></div>
+    <div className="upload-tools"><label>Section<select value={section} onChange={(event) => setSection(event.target.value)}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select></label>{section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <label>Issue<select value={issueId} onChange={(event) => setIssueId(event.target.value)}><option value="">Belum ditautkan</option>{inspection.issues.map((issue) => <option key={issue.id} value={issue.id}>{issue.defect_type}</option>)}</select></label>)}<button type="button" className="small-action" disabled={section === 'DIMENSION'} onClick={() => { uploadTarget.current = { section, issueId }; input.current?.click() }}>+ Tambah foto</button><button type="button" className="primary-action" disabled={!layouts || !pageableSections.includes(section)} title={!pageableSections.includes(section) ? 'Dimension dan Issue memakai susunan khusus.' : undefined} onClick={openWizard}>＋ Tambah halaman</button></div>
     {(section === 'DIMENSION' || inspection.measurements.some(item => item.category === 'DIMENSION') || inspection.photos.some(photo => photo.section === 'DIMENSION')) && <DimensionPhotos inspection={inspection} run={run} addCustom={goDimensions} />}
     <input ref={input} className="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={(event) => {
       const files = event.target.files
       if (files?.length) { const target = uploadTarget.current; void run(() => api.upload(inspection.id, target.section, files, target.issueId || undefined), `${files.length} foto tersimpan.`) }
       event.target.value = ''
     }} aria-label="Unggah atau ambil foto" />
+    {!!photoPages.length && <section className="report-pages" aria-label="Susunan halaman foto laporan"><div className="report-pages-heading"><div><span className="section-kicker">SUSUNAN DOCX</span><h3>Halaman foto</h3><p>Foto hanya muncul sekali. Setiap slot mempertahankan rasio gambar dan caption masing-masing.</p></div><button type="button" className="small-action" onClick={openWizard}>＋ Halaman</button></div>
+      {photoPages.map((page, index) => { const layout = getLayout(page.template_id); if (!layout) return null; return <article className="report-page-card" key={page.id}>
+        <header><div><span className="section-kicker">HALAMAN {index + 1} · {sectionLabel(page.section)}</span><h4>{layout.code} — {layout.title}</h4><p>{page.photo_ids.filter(Boolean).length} dari {layout.photo_count} slot terisi · foto maks {layout.max_photo_height_cm} cm tinggi</p></div><div className="report-page-actions"><button type="button" aria-label={`Pindah halaman ${index + 1} ke atas`} disabled={pageSaving || index === 0} onClick={() => movePage(index, -1)}>↑</button><button type="button" aria-label={`Pindah halaman ${index + 1} ke bawah`} disabled={pageSaving || index === photoPages.length - 1} onClick={() => movePage(index, 1)}>↓</button><button type="button" className="danger-text" disabled={pageSaving} onClick={() => removePage(page)}>Hapus halaman</button></div></header>
+        {renderPageSlots(page, layout)}
+      </article>})}
+    </section>}
     {ordered.length === 0 ? (inspection.photos.length === 0 && <p className="empty-inline">Belum ada foto. Pilih tombol kamera di atas.</p>) : <div className="photo-list">{ordered.map((photo, index) => <article className="photo-card" key={photo.id} draggable onDragStart={() => setDragged(photo.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => { const source = ordered.find((item) => item.id === dragged); if (source) void reorder(source, photo); setDragged(null) }}>
       <button type="button" className="photo-thumb" onClick={() => setPreview(photo.id)} aria-label={`Lihat foto ${index + 1} penuh`}><img src={`/api/photos/${photo.id}/file?v=${inspection.revision}`} alt={photo.caption || `Foto ${sectionLabel(photo.section)} ${index + 1}`} loading="lazy" /></button>
-      <div className="photo-meta"><span className="section-kicker">{String(index + 1).padStart(2, '0')} / {sectionLabel(photo.section)}</span><label>Caption<input key={`${photo.id}-${photo.caption}`} defaultValue={photo.caption || ''} placeholder="Keterangan foto" onBlur={(event) => { if (event.target.value !== (photo.caption || '')) void run(() => api.patchPhoto(photo.id, { caption: event.target.value }), 'Caption tersimpan.') }} /></label><div className="photo-controls"><select aria-label="Pindah section" value={photo.section} onChange={(event) => void run(() => api.patchPhoto(photo.id, { section: event.target.value, issue_id: event.target.value === 'ISSUE' ? photo.issue_id : null, measurement_id: event.target.value === 'DIMENSION' ? photo.measurement_id : null }), 'Section foto diperbarui.')}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select>{photo.section === 'DIMENSION' && <select aria-label="Tautkan foto ke ukuran" value={photo.measurement_id || ''} onChange={event => void run(() => api.patchPhoto(photo.id, { measurement_id: event.target.value || null, issue_id: null }), 'Foto ditautkan ke ukuran.')}><option value="">Pilih ukuran untuk foto ini</option>{inspection.measurements.filter(item => item.category === 'DIMENSION').map(item => <option key={item.id} value={item.id} disabled={inspection.photos.filter(other => other.measurement_id === item.id).length >= 2}>{item.label}</option>)}</select>}{photo.section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <select aria-label="Tautkan issue" value={photo.issue_id || ''} onChange={(event) => void run(() => api.patchPhoto(photo.id, { issue_id: event.target.value || null }), 'Tautan issue diperbarui.')}><option value="">Issue belum dipilih</option>{inspection.issues.map((item) => <option key={item.id} value={item.id}>{item.defect_type}</option>)}</select>)}</div><div className="photo-controls"><button type="button" disabled={index === 0} onClick={() => void reorder(photo, ordered[index - 1]!)}>↑</button><button type="button" disabled={index === ordered.length - 1} onClick={() => void reorder(photo, ordered[index + 1]!)}>↓</button><button type="button" onClick={() => void run(() => api.patchPhoto(photo.id, { rotate_degrees: 90 }), 'Foto diputar.')}>Putar</button><button type="button" className="danger-text" onClick={() => { if (window.confirm('Hapus foto ini?')) void run(() => api.deletePhoto(photo.id), 'Foto dihapus.') }}>Hapus</button></div></div>
+      <div className="photo-meta"><span className="section-kicker">{String(index + 1).padStart(2, '0')} / {sectionLabel(photo.section)}</span><label>Caption<input key={`${photo.id}-${photo.caption}`} defaultValue={photo.caption || ''} placeholder="Keterangan foto" onBlur={(event) => { if (event.target.value !== (photo.caption || '')) void run(() => api.patchPhoto(photo.id, { caption: event.target.value }), 'Caption tersimpan.') }} /></label><div className="photo-controls"><select aria-label="Pindah section" disabled={photoPages.some(page => page.photo_ids.includes(photo.id))} title={photoPages.some(page => page.photo_ids.includes(photo.id)) ? 'Lepas foto dari slot halaman terlebih dahulu' : undefined} value={photo.section} onChange={(event) => void run(() => api.patchPhoto(photo.id, { section: event.target.value, issue_id: event.target.value === 'ISSUE' ? photo.issue_id : null, measurement_id: event.target.value === 'DIMENSION' ? photo.measurement_id : null }), 'Section foto diperbarui.')}>{sections.map((item) => <option value={item} key={item}>{sectionLabel(item)}</option>)}</select>{photo.section === 'DIMENSION' && <select aria-label="Tautkan foto ke ukuran" value={photo.measurement_id || ''} onChange={event => void run(() => api.patchPhoto(photo.id, { measurement_id: event.target.value || null, issue_id: null }), 'Foto ditautkan ke ukuran.')}><option value="">Pilih ukuran untuk foto ini</option>{inspection.measurements.filter(item => item.category === 'DIMENSION').map(item => <option key={item.id} value={item.id} disabled={inspection.photos.filter(other => other.measurement_id === item.id).length >= 2}>{item.label}</option>)}</select>}{photo.section === 'ISSUE' && (inspection.issues.length === 0 ? <p className="empty-inline">Belum ada issue. <button type="button" className="text-action" onClick={goIssues}>Buat dulu di tab Issues</button></p> : <select aria-label="Tautkan issue" value={photo.issue_id || ''} onChange={(event) => void run(() => api.patchPhoto(photo.id, { issue_id: event.target.value || null }), 'Tautan issue diperbarui.') }><option value="">Issue belum dipilih</option>{inspection.issues.map((item) => <option key={item.id} value={item.id}>{item.defect_type}</option>)}</select>)}</div><div className="photo-controls"><button type="button" disabled={index === 0} onClick={() => void reorder(photo, ordered[index - 1]!)}>↑</button><button type="button" disabled={index === ordered.length - 1} onClick={() => void reorder(photo, ordered[index + 1]!)}>↓</button><button type="button" onClick={() => void run(() => api.patchPhoto(photo.id, { rotate_degrees: 90 }), 'Foto diputar.')}>Putar</button><button type="button" className="danger-text" onClick={() => { if (window.confirm('Hapus foto ini?')) void run(() => api.deletePhoto(photo.id), 'Foto dihapus.') }}>Hapus</button></div></div>
     </article>)}</div>}
+    {wizardOpen && <div className="layout-wizard-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setWizardOpen(false) }}><section className="layout-wizard" role="dialog" aria-modal="true" aria-labelledby="layout-wizard-title">
+      <header className="layout-wizard-top"><span>LANGKAH {wizardStep === 'layout' ? '1' : '2'} DARI 2 · {wizardStep === 'layout' ? 'PILIH TATA LETAK' : 'ISI SLOT FOTO'}</span><button type="button" aria-label="Tutup pemilih layout" onClick={() => setWizardOpen(false)}>×</button></header>
+      <div className="layout-wizard-body"><h2 id="layout-wizard-title">{wizardStep === 'layout' ? 'Pilih template halaman foto' : 'Sesuaikan foto dan caption'}</h2><p>{wizardStep === 'layout' ? 'Pilih jumlah foto untuk satu halaman. Foto tetap maksimal dua kolom; semakin sedikit slot, ukuran cetaknya semakin besar.' : 'Pilih foto yang sudah diunggah untuk setiap slot. Caption otomatis mengikuti foto dan dapat diedit di galeri.'}</p>
+        {wizardStep === 'layout' ? <>
+          <label className="layout-section-select">Section halaman<select value={wizardSection} onChange={event => { setWizardSection(event.target.value); setTemplateId(null) }}>{pageableSections.map(item => <option key={item} value={item}>{sectionLabel(item)}</option>)}</select></label>
+          <div className="layout-category-tabs" role="tablist" aria-label="Kategori layout">{categoryOptions.map(item => <button type="button" role="tab" aria-selected={category === item} className={category === item ? 'active' : ''} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+          <div className="layout-template-grid">{visibleLayouts.map(layout => <button type="button" className={`layout-template-card${templateId === layout.id ? ' selected' : ''}`} key={layout.id} aria-pressed={templateId === layout.id} onClick={() => setTemplateId(layout.id)}>
+            <strong>{layout.code} · {layout.title}</strong><span className="layout-template-preview" style={{ gridTemplateColumns: `repeat(${layout.columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${layout.rows}, 1fr)` }}>{Array.from({ length: layout.photo_count }, (_, slot) => <i key={slot} />)}</span><span>{layout.description}</span><small>Area tabel 18 cm · foto maks. {layout.max_photo_height_cm} cm tinggi</small>
+          </button>)}</div>
+          {!visibleLayouts.length && <p className="empty-inline">Belum ada template untuk section ini.</p>}
+        </> : (() => { const page = photoPages.find(item => item.id === activePageId); const layout = page ? getLayout(page.template_id) : undefined; return page && layout ? <>{renderPageSlots(page, layout, true)}<p className="layout-print-note">Saat dicetak: tabel selebar area isi Word, rata tengah, maksimal dua kolom, dan foto tidak dipotong.</p></> : <p role="alert">Halaman tidak ditemukan. Tutup lalu buka kembali pemilih layout.</p> })()}
+      </div>
+      <footer className="layout-wizard-footer"><span>{wizardStep === 'layout' ? `Section: ${sectionLabel(wizardSection)}` : `${photoPages.find(item => item.id === activePageId)?.photo_ids.filter(Boolean).length || 0} slot terisi`}</span><div>{wizardStep === 'slots' && <button type="button" className="small-action" disabled={pageSaving} onClick={() => setWizardStep('layout')}>Kembali</button>}{wizardStep === 'layout' ? <button type="button" className="primary-action" disabled={!templateId || pageSaving} onClick={() => void continueToSlots()}>{pageSaving ? 'Menyimpan…' : 'Lanjutkan'}</button> : <button type="button" className="primary-action" onClick={() => setWizardOpen(false)}>Selesai</button>}</div></footer>
+    </section></div>}
     {preview && <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label="Foto penuh" onClick={() => setPreview(null)}><button type="button" onClick={() => setPreview(null)}>Tutup ×</button><img src={`/api/photos/${preview}/file?v=${inspection.revision}`} alt="Foto penuh" /></div>}
   </div>
 }

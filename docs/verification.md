@@ -60,3 +60,28 @@ tampil tetapi form dan data perlu server lokal. `offline_pwa=false` tetap akurat
 Pembersihan temporary audit tambahan pada dokumen Issue Baru ditolak oleh automatic
 approval review untuk aksi hapus. Hanya `docs/evidence/additional-issues/` yang
 tersisa secara lokal dan di-ignore; schema dan konfigurasi menggunakan RH.
+
+## Uji Cabang fix-dimensi-rapih pada 12 Oktober 2026
+
+| Pemeriksaan | Bukti aktual | Hasil |
+| --- | --- | --- |
+| Pytest suite | Perintah `.\.venv\Scripts\python.exe -m pytest tests/ -q` | 47 passed, 1 warning (Starlette testclient). Seluruh pengujian backend dan DOCX lolos 100%. |
+| TypeScript check | Perintah `npx tsc --noEmit` di folder `frontend/` | Lolos bersih 0 error. |
+| Sidebar foto QC kursi | `frontend/src/pages/QcApp.tsx` & `frontend/public/rail-qc.jpg` | Sidebar menampilkan foto QC kursi asli bengkel (`.rail-scene img` src `/rail-qc.jpg`), bukan ilustrasi vektor. |
+| Alur inspeksi & validasi | Eksekusi API & UI live QA pada database sementara `live-qa-1449450` | Alur buat customer `Poliform QC`, produk `Kursi Santai Wood`, draf `QC-20261012-001`, 2 foto Product View, ukuran Length + 2 foto slot dimensi berhasil tersimpan dan lolos validasi bersih (0 error). |
+| Dokumen DOCX - Product Dimension halaman baru | `tools/verify_live_qa.py` menghasilkan `C:\Users\shint\AppData\Local\Temp\opencode\live_qa_report.docx` | Heading `Product Dimension` terverifikasi memiliki `page_break_before = True` (selalu mulai di lembar baru). |
+| Dokumen DOCX - Kerapian DIM / BOX | Inspeksi struktur tabel header Word pada file laporan uji | Baris `DIM(mm)` dan `BOX(mm)` terisi rapih, nilai L/W/H selaras dengan kolom header. |
+
+## Browser QA tambahan — 12 Oktober 2026
+
+| Pemeriksaan | Evidence aktual | Hasil |
+| --- | --- | --- |
+| Browser desktop | Localhost `5174`, viewport 1440×1000; `.artifacts/qa-20261012-093414/home-desktop.png` | Foto QC bengkel tampil di sidebar; request `/rail-qc.jpg` HTTP 200. Network 46 request seluruhnya 200/304, tanpa error console. DevTools mencatat 20 form fields tanpa `id` atau `name`; ini perlu perapihan aksesibilitas terpisah. |
+| Customer, produk, inspeksi | Form browser pada DB sementara `live-qa-1449450` | Membuat customer `RH`, produk `Kursi Lounge QA`, inspeksi `QC-20261012-002`. Browser upload helper menolak path fixture lokal sebagai di luar workspace, jadi dua foto Product View dan dua foto slot Length dibuat dari fixture sintetis melalui API lokal; UI Photos menampilkan 2 foto Product View dan Length `2/2 foto · Lengkap`. |
+| Measurement dan review | Tab Measurement dan Review untuk `QC-20261012-002` | Length 852 mm vs standar 850 mm tampil PASS. Validasi 0 error; 2 warning `MC not inspected` dan `Gloss not inspected` karena dua bagian itu tidak diisi. |
+| Preview Word | Tombol `Preview tiap halaman` di browser; screenshot `.artifacts/qa-20261012-093414/review-page2.png` | Render Microsoft Word menghasilkan 2 halaman. Product Dimension tampil di halaman 2 dan baris DIM/BOX terbaca segaris. DOCX mengonfirmasi `page_break_before=True` pada heading Product Dimension. |
+| Unduh DOCX | Unduhan dari tombol browser `Unduh DOCX`; `Downloads/Rhythm_House_QA-Kursi_Lounge_QA-261012-FINAL-QC-20261012-002-r6.docx` | 84,315 byte. SHA-256 `945F29775A1E147492AEEDD32D79D381AB148C2A2A5586BBFC13C529D83D773D` sama dengan file keluaran server. |
+| Server QA | Port 8000 dan 5174 sudah aktif saat pemeriksaan; DB temp telah berisi satu record uji | Percobaan menghentikan proses server ditolak automatic approval review. Server yang sudah aktif digunakan kembali; record lama tidak ditimpa. Log, fixture sintetis, dan screenshot tetap di `.artifacts/qa-20261012-093414/` (di-ignore Git). |
+
+| Pengujian Robot Browser Live | Perekaman WebP video `live_qa_full_flow_1791772813227.webp` & screenshot verifikasi | Interaksi nyata peramban: sidebar foto QC kursi terverifikasi, inspeksi `QC-20261012-001` dibuka, tab Foto, tab Ukuran, tab Review (validasi bersih 0 error & unduh DOCX), serta pembuatan inspeksi baru `QC-20261012-003` berhasil 100%. |
+

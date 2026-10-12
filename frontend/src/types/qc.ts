@@ -20,6 +20,14 @@ export interface Photo {
   caption: string | null; sort_order: number; issue_id: string | null;
   measurement_id: string | null; dimension_slot: 1 | 2 | null
 }
+export interface PhotoPage {
+  id: string; section: string; template_id: string; photo_ids: (string | null)[]
+}
+export interface PhotoLayoutTemplate {
+  id: string; code: string; title: string; category: string; description: string;
+  columns: number; rows: number; photo_count: number; max_photo_height_cm: number; sections: string[]
+}
+export interface PhotoLayoutCatalog { version: number; templates: PhotoLayoutTemplate[] }
 export interface Inspection {
   id: string; inspection_number: string; customer_id: string; product_id: string;
   customer_name: string; customer_code: string; product_name: string;
@@ -27,7 +35,7 @@ export interface Inspection {
   qc_name: string; quantity: number; aql: string | null;
   inspected_quantity: number | null; product_dimensions: Record<string, number>;
   box_dimensions: Record<string, number>; photo_layout: Record<string, number>; status: string; conclusion: string | null;
-  communication_status: string | null; revision: number; updated_at: string;
+  communication_status: string | null; photo_pages: PhotoPage[]; revision: number; updated_at: string;
   photos: Photo[]; issues: Issue[]; measurements: Measurement[]
 }
 export interface Defect {

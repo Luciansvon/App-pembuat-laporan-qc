@@ -212,3 +212,65 @@ button:disabled { cursor: not-allowed; opacity: .52; }
   .new-issue { grid-template-columns: 1fr; }
   .new-issue label:first-child { grid-column: auto; }
 }
+
+.report-pages { margin-top: 27px; border-top: 1px solid #c6d1c5; padding-top: 23px; }
+.report-pages-heading, .report-page-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.report-pages-heading h3 { margin: 6px 0; font-size: 20px; }
+.report-pages-heading p, .report-page-card > header p { margin: 5px 0 0; color: #627366; font-size: 12px; }
+.report-page-card { margin-top: 16px; border: 1px solid #bccabc; background: #fff; padding: 18px; }
+.report-page-card > header { border-bottom: 1px solid #e0e6de; padding-bottom: 13px; margin-bottom: 13px; }
+.report-page-card h4 { margin: 6px 0 0; font-size: 16px; }
+.report-page-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.report-page-actions button:not(.danger-text) { min-width: 34px; min-height: 32px; border: 1px solid #b4c4b4; background: #f7f9f5; color: #244b3e; cursor: pointer; }
+.report-page-actions button:disabled { opacity: .45; cursor: default; }
+.report-page-slots { display: grid; gap: 10px; margin-top: 15px; }
+.report-page-slot { min-width: 0; border: 1px solid #d0d9cf; background: #fafbf8; padding: 10px; }
+.report-page-slot > img { display: block; width: 100%; height: clamp(115px, 17vw, 210px); object-fit: contain; background: #eef0eb; }
+.report-page-slot label { display: grid; gap: 6px; margin-top: 9px; color: #425e4b; font-size: 11px; font-weight: 700; }
+.report-page-slot select { width: 100%; min-width: 0; padding: 9px; border: 1px solid #aebfb0; background: #fff; color: #192720; font-size: 13px; }
+.report-page-slot-empty { min-height: clamp(115px, 17vw, 210px); display: grid; place-content: center; gap: 7px; border: 1px dashed #9aac9b; background: #f1f5ef; color: #516a57; text-align: center; }
+.report-page-slot-empty span { font-size: 25px; }
+.report-page-caption { min-height: 18px; margin: 7px 2px 0; color: #506452; font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+.photo-slot-heading { display: flex; justify-content: space-between; gap: 12px; margin: 15px 0 0; color: #435e49; font-size: 12px; }
+.photo-slot-heading span { color: #647567; text-align: right; }
+.layout-wizard-backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 24px; background: rgba(19, 29, 23, .38); }
+.layout-wizard { width: min(1160px, 100%); max-height: min(92vh, 1000px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; background: #fff; border: 1px solid #d2d9d0; border-radius: 12px; box-shadow: 0 22px 70px rgba(17, 31, 21, .25); }
+.layout-wizard-top { min-height: 56px; display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; border-bottom: 1px solid #e1e6df; color: #546a57; font-size: 11px; letter-spacing: .12em; font-weight: 700; }
+.layout-wizard-top button { width: 36px; height: 36px; border: 0; background: transparent; color: #526457; font-size: 30px; cursor: pointer; }
+.layout-wizard-body { overflow: auto; padding: 26px 28px 30px; }
+.layout-wizard-body > h2 { margin: 0 0 8px; color: #17271e; font-size: clamp(25px, 3vw, 34px); letter-spacing: -.04em; }
+.layout-wizard-body > p { max-width: 850px; color: #617265; line-height: 1.55; margin: 0 0 19px; }
+.layout-section-select { display: flex; align-items: center; gap: 10px; color: #425e4b; font-size: 12px; font-weight: 700; }
+.layout-section-select select { min-width: 180px; border: 1px solid #b8c6b8; border-radius: 6px; padding: 9px 11px; background: #fff; color: #1b2b21; font: inherit; }
+.layout-category-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 19px 0; }
+.layout-category-tabs button { border: 0; border-radius: 22px; padding: 10px 15px; white-space: nowrap; background: #eef0ed; color: #435047; cursor: pointer; }
+.layout-category-tabs button.active { background: #1e4b31; color: #fff; }
+.layout-template-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.layout-template-card { min-width: 0; display: grid; align-content: start; gap: 11px; border: 1px solid #d1d8d0; border-radius: 9px; padding: 13px; background: #fff; color: #192720; text-align: left; cursor: pointer; }
+.layout-template-card:hover, .layout-template-card.selected { border: 2px solid #23613a; padding: 12px; background: #f0f8f0; box-shadow: 0 4px 14px rgba(22, 69, 40, .12); }
+.layout-template-card strong { min-height: 38px; font-size: 14px; }
+.layout-template-card > span:not(.layout-template-preview) { min-height: 42px; color: #58685c; font-size: 12px; line-height: 1.45; }
+.layout-template-card small { color: #657669; font-size: 10px; }
+.layout-template-preview { min-height: 155px; display: grid; gap: 8px; padding: 11px; border: 1px solid #d8ded7; border-radius: 7px; background: #f8f9f6; }
+.layout-template-preview i { min-width: 0; min-height: 0; display: block; border: 1px dashed #7d8b80; border-radius: 4px; background: #edf0ec; }
+.layout-print-note { margin: 15px 0 0!important; padding: 10px 12px; background: #f0f5ed; border-left: 3px solid #49794f; font-size: 12px; }
+.layout-wizard-footer { min-height: 68px; display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 24px; border-top: 1px solid #d9dfd8; background: #fff; color: #566959; font-size: 12px; }
+.layout-wizard-footer > div { display: flex; gap: 9px; }
+.layout-wizard-footer .primary-action:disabled { opacity: .5; cursor: default; }
+@media (max-width: 900px) { .layout-template-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .layout-wizard-backdrop { padding: 8px; }
+  .layout-wizard { max-height: 96vh; border-radius: 8px; }
+  .layout-wizard-top, .layout-wizard-footer { padding: 10px 14px; }
+  .layout-wizard-body { padding: 18px 14px 22px; }
+  .layout-template-grid { grid-template-columns: 1fr; }
+  .layout-template-card { grid-template-columns: minmax(0, 1fr) 105px; align-items: center; }
+  .layout-template-card strong, .layout-template-card > span:not(.layout-template-preview), .layout-template-card small { grid-column: 1; }
+  .layout-template-preview { grid-column: 2; grid-row: 1 / 4; min-height: 110px; }
+  .report-page-card { padding: 11px; }
+  .report-page-card > header { display: block; }
+  .report-page-actions { margin-top: 10px; }
+  .report-page-slots { grid-template-columns: 1fr!important; }
+  .photo-slot-heading { display: block; }
+  .photo-slot-heading span { display: block; text-align: left; margin-top: 5px; }
+}

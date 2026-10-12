@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.core.config import Settings
 from app.models.tables import Inspection, InspectionPhoto, Issue, Measurement
+from app.report.photo_layouts import photo_layout_by_id
 from app.services.storage import photo_path
 
 
@@ -23,6 +24,10 @@ def inspect_report(session: Session, inspection: Inspection, template_config: di
         errors.append("Required report header is incomplete")
     issue_ids = {issue.id for issue in issues}
     dimension_ids = {item.id for item in measurements if item.category == "DIMENSION"}
+    photos_by_id = {photo.id: photo for photo in photos}
+    assigned_page_photo_ids = {photo_id for page in inspection.photo_pages or []
+                               if isinstance(page, dict)
+                               for photo_id in page.get("photo_ids", []) if photo_id}
     renderable_sections = set(template_config.get("sections", ()))
     for photo in photos:
         photo_label = f"Photo {photo.id[:8]} ({photo.section})"
@@ -34,7 +39,7 @@ def inspect_report(session: Session, inspection: Inspection, template_config: di
             errors.append(f"{photo_label} is linked to an unavailable issue")
         elif photo.section == "ISSUE" and photo.issue_id is None:
             errors.append(f"{photo_label} must be linked to an issue before report generation")
-        elif photo.issue_id is None and photo.section not in renderable_sections:
+        elif photo.issue_id is None and photo.section not in renderable_sections and photo.id not in assigned_page_photo_ids:
             errors.append(f"{photo_label} is not supported by the selected report template")
         try:
             path = photo_path(settings, photo)
@@ -42,6 +47,25 @@ def inspect_report(session: Session, inspection: Inspection, template_config: di
                 image.load()
         except (HTTPException, OSError, ValueError, ArithmeticError, Image.DecompressionBombError):
             errors.append(f"{photo_label} is missing or unreadable")
+    for page_number, page in enumerate(inspection.photo_pages or [], start=1):
+        if not isinstance(page, dict):
+            errors.append(f"Photo page {page_number} has invalid configuration")
+            continue
+        layout = photo_layout_by_id(str(page.get("template_id", "")))
+        if layout is None:
+            errors.append(f"Photo page {page_number} uses an unavailable layout")
+            continue
+        photo_ids = page.get("photo_ids", [])
+        if page.get("section") not in layout["sections"] or len(photo_ids) != layout["photo_count"]:
+            errors.append(f"Photo page {page_number} does not match its layout")
+            continue
+        for slot_number, photo_id in enumerate(photo_ids, start=1):
+            if not photo_id:
+                errors.append(f"Photo page {page_number}, slot {slot_number} is empty")
+                continue
+            photo = photos_by_id.get(photo_id)
+            if photo is None or photo.section != page["section"]:
+                errors.append(f"Photo page {page_number}, slot {slot_number} has an unavailable photo")
     if not any(photo.section == "PRODUCT_VIEW" for photo in photos):
         warnings.append("Product View photos are empty")
     if not inspection.box_dimensions:

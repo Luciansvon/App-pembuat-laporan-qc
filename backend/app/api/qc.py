@@ -22,6 +22,7 @@ from app.schemas.qc import (CustomerIn, CustomerPatch, DefectIn, InspectionIn,
 from app.services.review import inspect_report
 from app.services.storage import inspection_dir, photo_path, rotate_photo, save_photo
 from app.report.generator import ReportAssetUnavailable, generate_report, template_for, report_filename
+from app.report.photo_layouts import photo_layout_catalog, photo_layout_by_id
 from app.report.preview import PreviewUnavailable, preview_directory, preview_key, render_preview
 
 router = APIRouter()
@@ -199,6 +200,11 @@ def get_inspection(item_id: str, session: Session = Depends(db)) -> dict:
     return as_detail(session, require(session, Inspection, item_id))
 
 
+@router.get("/photo-layouts")
+def get_photo_layouts() -> dict:
+    return photo_layout_catalog()
+
+
 @router.patch("/inspections/{item_id}")
 def patch_inspection(item_id: str, data: InspectionPatch, session: Session = Depends(db)) -> dict:
     item = require(session, Inspection, item_id)
@@ -206,8 +212,29 @@ def patch_inspection(item_id: str, data: InspectionPatch, session: Session = Dep
         raise HTTPException(status_code=409, detail="Inspection changed; reload before saving")
     changes = data.model_dump(exclude_unset=True)
     changes.pop("revision")
+    if "photo_pages" in changes:
+        if changes["photo_pages"] is None:
+            raise HTTPException(status_code=422, detail="photo_pages cannot be empty; use an empty list to remove pages")
+        existing_photos = {photo.id: photo for photo in session.exec(
+            select(InspectionPhoto).where(InspectionPhoto.inspection_id == item_id)).all()}
+        for page in changes["photo_pages"]:
+            layout = photo_layout_by_id(page["template_id"])
+            if layout is None:
+                raise HTTPException(status_code=422, detail=f"Unknown photo layout: {page['template_id']}")
+            if page["section"] not in layout["sections"]:
+                raise HTTPException(status_code=422, detail="This photo layout is not available for the selected section")
+            if len(page["photo_ids"]) != layout["photo_count"]:
+                raise HTTPException(status_code=422, detail="Photo slot count does not match the selected layout")
+            for photo_id in page["photo_ids"]:
+                if photo_id is None:
+                    continue
+                photo = existing_photos.get(photo_id)
+                if photo is None:
+                    raise HTTPException(status_code=422, detail="Choose a photo from this inspection")
+                if photo.section != page["section"]:
+                    raise HTTPException(status_code=422, detail="Photo section must match its report page")
     for key, value in changes.items():
-        if value is None and key in {"po", "inspection_type", "date", "qc_name", "quantity", "product_dimensions", "box_dimensions", "photo_layout", "status"}:
+        if value is None and key in {"po", "inspection_type", "date", "qc_name", "quantity", "product_dimensions", "box_dimensions", "photo_layout", "photo_pages", "status"}:
             raise HTTPException(status_code=422, detail=f"{key} cannot be empty")
         setattr(item, key, value)
     item.revision += 1
@@ -439,6 +466,11 @@ def patch_photo(item_id: str, data: PhotoPatch, request: Request,
     degrees = changes.pop("rotate_degrees", None)
     target_section = changes.get("section", photo.section)
     target_measurement = changes.get("measurement_id", photo.measurement_id)
+    inspection = require(session, Inspection, photo.inspection_id)
+    if target_section != photo.section and any(
+        photo.id in page.get("photo_ids", []) for page in inspection.photo_pages or []
+    ):
+        raise HTTPException(status_code=409, detail="Remove this photo from its report page before moving it to another section")
     if target_section != "DIMENSION":
         if changes.get("measurement_id"):
             raise HTTPException(status_code=422, detail="Only DIMENSION photos can be linked to a dimension")
@@ -469,6 +501,13 @@ def delete_photo(item_id: str, request: Request, session: Session = Depends(db))
     if session.exec(select(TestReading.id).where(TestReading.photo_id == item_id)).first():
         raise HTTPException(status_code=409, detail="Photo is linked to a test reading")
     path = photo_path(request.app.state.settings, photo)
+    inspection = require(session, Inspection, photo.inspection_id)
+    pages = []
+    for page in inspection.photo_pages or []:
+        updated = dict(page)
+        updated["photo_ids"] = [None if photo_id == item_id else photo_id for photo_id in page.get("photo_ids", [])]
+        pages.append(updated)
+    inspection.photo_pages = pages
     touch(session, photo.inspection_id)
     session.delete(photo)
     session.commit()

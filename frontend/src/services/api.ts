@@ -1,4 +1,4 @@
-import type { Customer, Defect, Inspection, Issue, Measurement, Photo, Product, ReportPreview, Review, TestReading } from '../types/qc'
+import type { Customer, Defect, Inspection, Issue, Measurement, Photo, PhotoLayoutCatalog, Product, ReportPreview, Review, TestReading } from '../types/qc'
 import { errorMessage } from './errorMessage'
 import { androidReport, isAndroidApp, type AndroidReportResult } from './android'
 
@@ -31,6 +31,7 @@ export const api = {
   createProduct: (body: { customer_id: string; name: string; standard_dimensions: Record<string, number> }) => request<Product>('/products', 'POST', body),
   inspections: () => request<Inspection[]>('/inspections'),
   inspection: (id: string) => request<Inspection>(`/inspections/${id}`),
+  photoLayouts: () => request<PhotoLayoutCatalog>('/photo-layouts'),
   createInspection: (body: Record<string, unknown>) => request<Inspection>('/inspections', 'POST', body),
   patchInspection: (id: string, body: Record<string, unknown>) => request<Inspection>(`/inspections/${id}`, 'PATCH', body),
   deleteInspection: (id: string) => request<{ deleted: string }>(`/inspections/${id}`, 'DELETE'),
