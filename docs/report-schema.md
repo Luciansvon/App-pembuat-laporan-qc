@@ -37,7 +37,9 @@ nested tetap memiliki paragraf pemisah supaya gambar tidak menutup garis ISSUE.
 
 QC memilih jumlah foto per baris untuk tiap section (1–2, default 2 mengikuti
 dokumen asli) lewat tab Photos; pilihan tersimpan per inspeksi sebagai
-`photo_layout` sehingga laporan deterministik untuk input sama. Baris terakhir
+`photo_layout` sehingga laporan deterministik untuk input sama. Tiap section
+foto mengalir dalam satu tabel panjang (maks 2 kesamping, memanjang ke bawah
+mengikuti halaman Word) — tidak dipotong per jumlah foto. Baris terakhir
 yang belum penuh membagi kolom secara merata agar foto tetap sejajar.
 Caption tiap baris tetap terpusat dengan pemisah `|`, mengikuti pola label
 pada dokumen asli tetapi dengan perataan yang dirapikan.

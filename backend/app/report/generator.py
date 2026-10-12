@@ -494,11 +494,10 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
                                    cols=layout_cols(layout, section))
             started = True
             continue
-        for start in range(0, len(section_photos), config["max_photos_per_page"]):
-            heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()),
-                    page_break=started and section in break_before and start == 0)
-            photo_grid(document, section_photos[start:start + config["max_photos_per_page"]], settings,
-                       cols=layout_cols(layout, section))
+        heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()),
+                page_break=started and section in break_before)
+        photo_grid(document, section_photos, settings,
+                   cols=layout_cols(layout, section))
         started = True
     measurement_table(document, measurements, session)
     for issue in issues:
