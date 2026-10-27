@@ -72,8 +72,9 @@ def build(name: str, record: dict) -> Path:
     document.add_paragraph()
     header = document.sections[0].header.tables[0]
     header.autofit = False
+    inspect_col = record.get("header_inspect_col", 13)
     slots = {
-        (1, 1): "DESC", (1, 13): "INSPECT", (2, 1): "CUSTOMER", (2, 9): "PO",
+        (1, 1): "DESC", (1, inspect_col): "INSPECT", (2, 1): "CUSTOMER", (2, 9): "PO",
         (3, 1): "DATE", (3, 9): "QC", (4, 1): "QTY", (4, 9): "AQL",
         (5, 2): "DIM_1", (5, 4): "DIM_2", (5, 6): "DIM_3",
         (5, 9): "BOX_1", (5, 11): "BOX_2", (5, 14): "BOX_3",
@@ -109,6 +110,6 @@ def build(name: str, record: dict) -> Path:
 
 if __name__ == "__main__":
     catalog = json.loads((TEMPLATES / "catalog.json").read_text(encoding="utf-8"))
-    for key in ("poliform", "rh", "default"):
+    for key in ("poliform", "rh", "default", "rh_packing"):
         result = build(key, catalog["templates"][key])
         print(f"Clean template: {result}")

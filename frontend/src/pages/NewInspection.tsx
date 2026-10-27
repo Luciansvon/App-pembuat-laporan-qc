@@ -18,7 +18,8 @@ export default function NewInspection({ customers, products, onCreate, onRefresh
   const [productName, setProductName] = useState('')
   const [standard, setStandard] = useState<Record<string, string>>({})
   const [po, setPo] = useState('')
-  const [inspectionType, setInspectionType] = useState('INLINE')
+  const [inspectionType, setInspectionType] = useState('FINAL')
+  const [reportType, setReportType] = useState<'STANDARD' | 'COMBINED' | 'PACKING'>('STANDARD')
   const [date, setDate] = useState(today())
   const [location, setLocation] = useState('QSF')
   const [qcName, setQcName] = useState('')
@@ -48,7 +49,7 @@ export default function NewInspection({ customers, products, onCreate, onRefresh
   return <form className="field-card new-inspection" onSubmit={async (event) => {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      await onCreate({ product_id: productId, po, inspection_type: inspectionType, date, location, qc_name: qcName, quantity: Number(quantity), aql: aql || null })
+      await onCreate({ product_id: productId, po, inspection_type: inspectionType, report_type: reportType, date, location, qc_name: qcName, quantity: Number(quantity), aql: aql || null })
     } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
   }}>
     <div className="field-card-heading"><div><span className="section-kicker">INSPEKSI BARU</span><h2>Identitas produk</h2></div><p>Metadata ini akan muncul pada setiap halaman Word.</p></div>
@@ -59,8 +60,15 @@ export default function NewInspection({ customers, products, onCreate, onRefresh
       <label>Produk<select value={productId} onChange={(event) => setProductId(event.target.value)} required><option value="">Pilih produk</option>{customerProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select></label>
       <button className="small-action" type="button" onClick={() => setNewProduct(!newProduct)}>+ Produk baru</button>
       {newProduct && <div className="inline-editor"><label>Nama produk<input value={productName} onChange={(event) => setProductName(event.target.value)} placeholder="Nama pada DESC" /></label><div className="axis-fields">{axes.map((axis) => <label key={axis}>Standar {axis} mm<input type="number" step="any" value={standard[axis] || ''} onChange={(event) => setStandard({ ...standard, [axis]: event.target.value })} /></label>)}</div><button type="button" disabled={busy || !productName || !customerId} onClick={createProduct}>Simpan produk</button></div>}
+      <label>Format laporan<select value={reportType} onChange={(event) => {
+        const val = event.target.value as 'STANDARD' | 'COMBINED' | 'PACKING'
+        setReportType(val)
+        if (val === 'PACKING') {
+          setInspectionType('PACKING')
+        }
+      }}><option value="STANDARD">Laporan Standar (Hanya Produk / Format Lama)</option><option value="COMBINED">Laporan Gabungan (Inspect &amp; Packing Jadi Satu / Format Baru)</option><option value="PACKING">Laporan Khusus Packing (Kemasan Box RH)</option></select></label>
       <label>PO<input value={po} onChange={(event) => setPo(event.target.value)} required placeholder="PO tunggal atau multi-nilai" /></label>
-      <label>Jenis inspeksi<select value={inspectionType} onChange={(event) => setInspectionType(event.target.value)}><option value="INLINE">INLINE</option><option value="FINAL">FINAL</option><option value="PRE_SHIPMENT">PRE SHIPMENT</option><option value="OTHER">OTHER</option></select></label>
+      <label>Jenis inspeksi<select value={inspectionType} onChange={(event) => setInspectionType(event.target.value)}><option value="INLINE">INLINE</option><option value="FINAL">FINAL</option><option value="PACKING">PACKING</option><option value="PRE_SHIPMENT">PRE SHIPMENT</option><option value="OTHER">OTHER</option></select></label>
       <label>Tanggal<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></label>
       <label>Lokasi<input value={location} onChange={(event) => setLocation(event.target.value)} /></label>
       <label>Nama QC<input value={qcName} onChange={(event) => setQcName(event.target.value)} required placeholder="Petugas inspeksi" /></label>

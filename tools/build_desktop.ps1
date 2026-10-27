@@ -32,6 +32,7 @@ try {
         'templates\photo-layouts.json;templates',
         'templates\poliform.docx;templates',
         'templates\rh.docx;templates',
+        'templates\roda.docx;templates',
         'templates\default.docx;templates'
     )
     $arguments = @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed',

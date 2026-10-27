@@ -11,6 +11,7 @@ from alembic.script import ScriptDirectory
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -70,6 +71,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=list(config.allowed_origins),
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "X-Confirm-Delete"],
+    )
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(config.allowed_hosts),
     )
     application.include_router(router, prefix="/api", tags=["foundation"])
     application.include_router(qc_router, prefix="/api", tags=["qc"])

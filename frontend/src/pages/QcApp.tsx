@@ -8,6 +8,8 @@ import FurnitureScene from '../components/FurnitureScene'
 import { ConfirmModal, type ConfirmOptions } from '../components/ConfirmModal'
 import NewInspection from './NewInspection'
 import Workspace, { type Tab } from './Workspace'
+import AiCopilot from '../components/AiCopilot'
+import type { CopilotNavigation } from '../services/aiService'
 import { isAndroidApp } from '../services/android'
 
 type View = 'home' | 'inspections' | 'master' | 'reports' | 'settings'
@@ -88,6 +90,25 @@ export default function QcApp() {
     }
     finally { setSavingCount((count) => count - 1) }
   }, [current?.id, refreshCurrent])
+  const handleApplyCopilotIssue = useCallback(
+    async (suggestion: { defectType: string; cause: string; repair: string; cap: string }) => {
+      if (!current?.id) {
+        setMessage('Buka salah satu inspeksi terlebih dahulu untuk menambahkan saran ini.')
+        return
+      }
+      await run(async () => {
+        await api.issues(current.id, {
+          defect_type: suggestion.defectType,
+          cause: suggestion.cause,
+          repair: suggestion.repair,
+          cap: suggestion.cap,
+          quantity: 1,
+          sort_order: current.issues?.length || 0,
+        })
+      }, `Saran cacat ${suggestion.defectType} berhasil ditambahkan ke laporan.`)
+    },
+    [current?.id, current?.issues?.length, run],
+  )
   function navigate(target: View) { if (locked) return; setCurrent(null); setCreating(false); setView(target); setError(''); setMessage(''); setSearch(''); setStatusFilter('ALL') }
   useEffect(() => {
     if (!isAndroidApp()) return
@@ -127,7 +148,24 @@ export default function QcApp() {
     finally { setSavingCount((count) => count - 1) }
   }
   async function open(id: string, tab: Tab) { if (locked) return; setError(''); try { setCurrent(await api.inspection(id)); setInitialTab(tab); setCreating(false); setView(tab === 'review' ? 'reports' : 'inspections') } catch (cause) { setError(String(cause)) } }
-  async function deleteCurrent(id: string) { setError(''); setMessage('Menghapusâ€¦'); try { await api.deleteInspection(id); setCurrent(null); await refreshLists(); setMessage('Inspeksi dihapus.') } catch (cause) { setError(String(cause)); setMessage('Gagal menghapus') } }
+
+  const handleCopilotNavigate = useCallback(
+    (nav: CopilotNavigation) => {
+      if (nav.targetView) {
+        navigate(nav.targetView)
+      }
+      if (nav.targetTab) {
+        setInitialTab(nav.targetTab)
+        if (current) {
+          window.dispatchEvent(new CustomEvent('inspectra-navigate-tab', { detail: nav.targetTab }))
+        } else if (inspections[0]?.id) {
+          void open(inspections[0].id, nav.targetTab)
+        }
+      }
+    },
+    [current, inspections, open],
+  )
+  async function deleteCurrent(id: string) { setError(''); setMessage('Menghapus...'); try { await api.deleteInspection(id); setCurrent(null); await refreshLists(); setMessage('Inspeksi dihapus.') } catch (cause) { setError(String(cause)); setMessage('Gagal menghapus') } }
   const filtered = useMemo(() => inspections.filter(item => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? ['IN_PROGRESS', 'REVIEW'].includes(item.status) : item.status === statusFilter)) && [item.inspection_number, item.product_name, item.customer_name, item.po].join(' ').toLowerCase().includes(search.toLowerCase())), [inspections, search, statusFilter])
   const stats: { label: string; value: number; icon: IconName; tone: string; filter: string; hint: string }[] = [
     { label: 'Total inspeksi', value: inspections.length, icon: 'inspection', tone: 'sage', filter: 'ALL', hint: 'Semua data tersimpan' },
@@ -145,34 +183,41 @@ export default function QcApp() {
       <nav>{navigation.map(item => <button type="button" key={item.id} className={view === item.id ? 'active' : ''} aria-current={view === item.id ? 'page' : undefined} disabled={locked} onClick={() => navigate(item.id)}><Icon name={item.icon} />{item.label}{item.id === 'inspections' && <span className="nav-count">{inspections.length}</span>}</button>)}</nav>
       <button className="rail-new" disabled={locked || connection !== 'connected'} onClick={startNew}><Icon name="plus" />Inspeksi baru</button>
       <div className="rail-scene"><img src="/rail-qc.jpg" alt="" /><div><span>Better quality.</span><strong>Better furniture.</strong></div></div>
-      <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkanâ€¦' : 'Koneksi terputus'}<small>Inspectra Â· v{appVersion}</small></span></div>
+      <div className="rail-footer"><span className={`status-dot ${connection}`} /><span>{connection === 'connected' ? 'Penyimpanan lokal aktif' : connection === 'checking' ? 'Menghubungkan...' : 'Koneksi terputus'}<small>Inspectra &middot; v{appVersion}</small></span></div>
     </aside>
     <div className="content-shell"><header className="topbar"><div className="breadcrumb">{current || creating ? <><button disabled={locked} onClick={() => navigate(view)}>{view === 'reports' ? 'Laporan' : 'Inspeksi'}</button><span>/</span>{current?.inspection_number || 'Baru'}</> : navigation.find(item => item.id === view)?.label}</div>
-      {!current && !creating && view !== 'settings' && <label className="global-search"><Icon name="search" /><input aria-label="Cari inspeksi, PO, produk atau customer" value={search} onChange={event => { setSearch(event.target.value); if (view === 'home') setView('inspections') }} placeholder="Cari inspeksi, PO, produk atau customerâ€¦" /></label>}
+      {!current && !creating && view !== 'settings' && <label className="global-search"><Icon name="search" /><input aria-label="Cari inspeksi, PO, produk atau customer" value={search} onChange={event => { setSearch(event.target.value); if (view === 'home') setView('inspections') }} placeholder="Cari inspeksi, PO, produk atau customer..." /></label>}
       <div className="qc-user"><span className="avatar">{user.split(' ').map(word => word.trim()[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'QC'}</span><span>{user}<small>QC workspace</small></span></div>
     </header><main className="main-content qc-content" id="main-content">
-      <div className="page-head"><div><span className="section-kicker">{current ? current.customer_name : dateLabel(today())}</span><h1>{title}{current && <span className={`status-badge ${current.status.toLowerCase()}`}>{statusLabel(current.status)}</span>}</h1><p>{current ? `${current.product_name} Â· PO ${current.po} Â· ${dateLabel(current.date)} Â· ${current.location || 'Lokasi belum diisi'}` : creating ? 'Lengkapi identitas, lalu lanjutkan pemeriksaan produk.' : view === 'home' ? 'Mulai inspeksi baru atau lanjutkan pekerjaan yang sudah ada.' : view === 'reports' ? 'Pilih inspeksi untuk periksa halaman dan membuat laporan Word.' : view === 'master' ? 'Customer, produk, dan pustaka defect untuk inspeksi.' : view === 'settings' ? 'Informasi aplikasi dan penyimpanan di komputer ini.' : 'Semua inspeksi tersimpan di ruang kerja lokal.'}</p></div>
+      <div className="page-head"><div><span className="section-kicker">{current ? current.customer_name : dateLabel(today())}</span><h1>{title}{current && <span className={`status-badge ${current.status.toLowerCase()}`}>{statusLabel(current.status)}</span>}</h1><p>{current ? `${current.product_name} \u00b7 PO ${current.po} \u00b7 ${dateLabel(current.date)} \u00b7 ${current.location || 'Lokasi belum diisi'}` : creating ? 'Lengkapi identitas, lalu lanjutkan pemeriksaan produk.' : view === 'home' ? 'Mulai inspeksi baru atau lanjutkan pekerjaan yang sudah ada.' : view === 'reports' ? 'Pilih inspeksi untuk periksa halaman dan membuat laporan Word.' : view === 'master' ? 'Customer, produk, dan pustaka defect untuk inspeksi.' : view === 'settings' ? 'Informasi aplikasi dan penyimpanan di komputer ini.' : 'Semua inspeksi tersimpan di ruang kerja lokal.'}</p></div>
         {connection === 'connected' && !current && !creating && ['home', 'inspections', 'reports'].includes(view) && <button type="button" className="primary-action" disabled={locked} onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}
         {current && <button type="button" className="small-action" disabled={locked} onClick={() => navigate(view)}><Icon name="back" />Kembali ke daftar</button>}
         {creating && <button type="button" className="small-action" onClick={() => navigate('inspections')}>Batal</button>}
       </div>
       {error && <p className="form-error" role="alert"><Icon name="warning" />{error}</p>}
-      {(message || pending) && !error && <p className="save-message" role="status"><Icon name={pending || saving ? 'clock' : 'check'} />{pending ? 'Perubahan belum tersimpanâ€¦' : message}</p>}
+      {(message || pending) && !error && <p className="save-message" role="status"><Icon name={pending || saving ? 'clock' : 'check'} />{pending ? 'Perubahan belum tersimpan...' : message}</p>}
       {connection === 'checking' ? <div className="loading-panels" aria-label="Memuat inspeksi"><div /><div /><div /></div>
       : <>{connection === 'unavailable' && <div className="save-recovery" role="alert">Koneksi ke penyimpanan lokal terputus. Draf yang sedang dibuka tetap ditampilkan agar tidak hilang; penyimpanan baru akan gagal sampai tersambung.<button type="button" onClick={() => window.location.reload()}>Coba sambung ulang</button></div>}
       {connection === 'unavailable' && !current && !creating ? <div className="panel empty-state"><Icon name="database" /><h2>Penyimpanan belum terhubung</h2><p>Data tetap tersimpan di perangkat ini. Buka kembali aplikasi untuk menyambung.</p><button className="primary-action" onClick={() => window.location.reload()}><Icon name="refresh" />Coba sambung ulang</button></div>
       : current ? <Workspace key={current.id} inspection={current} defects={defects} run={run} refresh={() => refreshCurrent(current.id)} onDelete={() => deleteCurrent(current.id)} initialTab={initialTab} onPendingChange={onPendingChange} busy={locked} />
       : creating ? <NewInspection customers={customers} products={products} onCreate={create} onRefresh={refreshLists} />
-      : view === 'master' ? <div className="master-grid"><section className="panel"><h2>Customer <span className="count-label">{customers.length}</span></h2><p>Dipilih saat membuat inspeksi.</p>{customers.filter(c => `${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())).map(c => <div className="master-row" key={c.id}><strong>{c.name}</strong><span>{c.code}</span></div>)}</section><section className="panel"><h2>Produk <span className="count-label">{products.length}</span></h2><p>Standar produk tetap terpisah dari hasil ukur.</p>{products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => <div className="master-row" key={p.id}><strong>{p.name}</strong><span>{customers.find(c => c.id === p.customer_id)?.name || 'â€”'}</span></div>)}</section><section className="panel"><h2>Jenis defect <span className="count-label">{defects.length}</span></h2><p>Saran Cause, Repair, CAP perlu persetujuan QC.</p><div className="defect-tags">{defects.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(d => <span key={d.id}>{d.name}</span>)}</div></section><button className="small-action master-create" onClick={startNew}><Icon name="plus" />Tambah customer atau produk melalui inspeksi baru</button></div>
-      : view === 'settings' ? <div className="settings-grid"><article className="panel"><Icon name="database" /><h2>Data di komputer ini</h2><p>SQLite menyimpan inspeksi. Foto dan laporan disimpan sebagai berkas lokal. Internet tidak diperlukan saat melakukan inspeksi.</p><p className="field-help">Paket EXE menyimpan data di folder pengguna Windows. Pembaruan aplikasi mempertahankan data yang sudah ada.</p></article><article className="panel"><Icon name="report" /><h2>Preview & laporan Word</h2><p>DOCX bisa dibuat langsung dari Inspectra. Preview tiap halaman memerlukan Microsoft Word yang terpasang di Windows.</p><p className="field-help">Versi {appVersion} Â· Tidak ada layanan AI atau akun cloud yang wajib digunakan.</p></article></div>
+      : view === 'master' ? <div className="master-grid"><section className="panel"><h2>Customer <span className="count-label">{customers.length}</span></h2><p>Dipilih saat membuat inspeksi.</p>{customers.filter(c => `${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())).map(c => <div className="master-row" key={c.id}><strong>{c.name}</strong><span>{c.code}</span></div>)}</section><section className="panel"><h2>Produk <span className="count-label">{products.length}</span></h2><p>Standar produk tetap terpisah dari hasil ukur.</p>{products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => <div className="master-row" key={p.id}><strong>{p.name}</strong><span>{customers.find(c => c.id === p.customer_id)?.name || '—'}</span></div>)}</section><section className="panel"><h2>Jenis defect <span className="count-label">{defects.length}</span></h2><p>Saran Cause, Repair, CAP perlu persetujuan QC.</p><div className="defect-tags">{defects.filter(d => d.name.toLowerCase().includes(search.toLowerCase())).map(d => <span key={d.id}>{d.name}</span>)}</div></section><button className="small-action master-create" onClick={startNew}><Icon name="plus" />Tambah customer atau produk melalui inspeksi baru</button></div>
+      : view === 'settings' ? <div className="settings-grid"><article className="panel"><Icon name="database" /><h2>Data di komputer ini</h2><p>SQLite menyimpan inspeksi. Foto dan laporan disimpan sebagai berkas lokal. Internet tidak diperlukan saat melakukan inspeksi.</p><p className="field-help">Paket EXE menyimpan data di folder pengguna Windows. Pembaruan aplikasi mempertahankan data yang sudah ada.</p></article><article className="panel"><Icon name="report" /><h2>Preview & laporan Word</h2><p>DOCX bisa dibuat langsung dari Inspectra. Preview tiap halaman memerlukan Microsoft Word yang terpasang di Windows.</p><p className="field-help">Versi {appVersion} · Tidak ada layanan AI atau akun cloud yang wajib digunakan.</p></article></div>
       : <div className={view === 'home' ? 'dashboard-layout' : 'list-layout'}><div className="dashboard-main">
         {view === 'home' && <div className="stats-grid">{stats.map(stat => <button key={stat.label} className={`stat-card ${stat.tone}`} onClick={() => { setView('inspections'); setStatusFilter(stat.filter) }}><Icon name={stat.icon} /><strong>{stat.value}</strong><span>{stat.label}</span><small>{stat.hint}</small></button>)}</div>}
         <section className="panel dashboard-list"><div className="list-title"><h2>{view === 'home' ? 'Inspeksi terbaru' : view === 'reports' ? 'Review & laporan' : 'Daftar inspeksi'} <span className="count-label">{filtered.length}</span></h2>{view === 'home' ? <button className="text-action" onClick={() => setView('inspections')}>Lihat semua <Icon name="arrow" /></button> : <select className="status-filter" aria-label="Filter status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="ALL">Semua status</option><option value="ACTIVE">Dalam proses</option>{['DRAFT', 'IN_PROGRESS', 'REVIEW', 'COMPLETED'].map(status => <option value={status} key={status}>{statusLabel(status)}</option>)}</select>}</div>
           {filtered.length ? <InspectionTable items={view === 'home' ? filtered.slice(0, 6) : filtered} onOpen={(id, tab) => void open(id, tab)} reports={view === 'reports'} /> : <div className="empty-state"><Icon name="inspection" /><h3>{search || statusFilter !== 'ALL' ? 'Tidak ada inspeksi yang cocok' : 'Inspeksi pertamamu dimulai di sini'}</h3><p>{search || statusFilter !== 'ALL' ? 'Ubah kata pencarian atau filter status.' : 'Buat customer, pilih produk, dan catat hasil pemeriksaan.'}</p>{!search && statusFilter === 'ALL' && <button className="primary-action" onClick={startNew}><Icon name="plus" />Buat inspeksi baru</button>}</div>}
-        </section>{view === 'home' && <div className="workflow-note"><Icon name="inspection" /><div><strong>Dari lantai produksi ke laporan</strong><span>Identitas â†’ Foto â†’ Ukuran â†’ Test â†’ Temuan â†’ Review</span></div><span>6 tahap</span></div>}</div>
+        </section>{view === 'home' && <div className="workflow-note"><Icon name="inspection" /><div><strong>Dari lantai produksi ke laporan</strong><span>Identitas &rarr; Foto &rarr; Ukuran &rarr; Test &rarr; Temuan &rarr; Review</span></div><span>6 tahap</span></div>}</div>
         {view === 'home' && <aside className="dashboard-aside"><article className="report-promo"><div><span className="section-kicker">LAPORAN QC</span><h2>Detail yang jelas.<br />Laporan yang rapi.</h2><p>Catat temuan, periksa tiap halaman, lalu simpan sebagai Word.</p></div><FurnitureScene /><button className="primary-action" onClick={startNew}>Mulai inspeksi <Icon name="arrow" /></button></article><article className="local-note"><Icon name="database" /><div><strong>Data tersimpan lokal</strong><p>Inspeksi, foto, dan laporan tetap di perangkat ini. Siap digunakan tanpa internet.</p></div></article></aside>}</div>}</>}
       <footer className="app-footer"><span>Inspectra · Furniture QC workspace</span><span><span className={`status-dot ${connection}`} />{connection === 'connected' ? 'Penyimpanan terhubung' : 'Menunggu koneksi'}</span></footer>
     </main></div>
+    <AiCopilot
+      currentInspection={current}
+      defects={defects}
+      appError={error}
+      onApplyIssue={handleApplyCopilotIssue}
+      onNavigate={handleCopilotNavigate}
+    />
     <ConfirmModal options={confirmOptions} onClose={() => setConfirmOptions(null)} />
   </div>
 }

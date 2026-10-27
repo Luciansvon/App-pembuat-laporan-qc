@@ -25,11 +25,25 @@ from app.services.storage import inspection_dir, photo_path
 
 TEMPLATE_DIR = RESOURCE_ROOT / "templates"
 SECTION_TITLES = {
+    "PACKING_ATTRIBUTE": "ATRIBUTE( Box, packing ,Label, Position Logo)",
+    "BOX_DIMENSION": "Box Dimension",
+    "PACKING_METHOD": "Packing Method",
+    "INNER_SKU_GLIDE": "Inner SKU & Fixed Glide",
     "PRODUCT_VIEW": "Product View", "PRODUCT_DETAIL": "Product Detail",
+    "DRAIN_HOLE": "Drain Hole",
     "DRAWING": "Drawing Product", "DIMENSION": "Product Dimension",
-    "MC": "MC Check", "GLOSS": "Gloss Meter Check", "SWATCH": "Panel Swatch",
+    "LEVEL_CHECK": "Check with level",
+    "MAL_CHECK": "Check With Mal",
+    "RADIUS": "Check with Mal R 44",
+    "RADIUS_R44": "Check with Mal R 44",
+    "RADIUS_R10": "Check with Mal R 10",
+    "MC": "MC Check", "INSPECTED_PRODUCT": "Inspected Product", "GLOSS": "Gloss Meter Check", "SWATCH": "Panel Swatch",
     "ISSUE": "ISSUE", "OTHER": "Other Inspection",
 }
+
+
+def section_title(config: dict, section: str) -> str:
+    return config.get("section_titles", {}).get(section, SECTION_TITLES.get(section, section.replace("_", " ").title()))
 
 
 class ReportAssetUnavailable(Exception):
@@ -38,7 +52,14 @@ class ReportAssetUnavailable(Exception):
 
 def template_for(inspection: Inspection, settings: Settings) -> tuple[dict, bool]:
     catalog = json.loads((TEMPLATE_DIR / "catalog.json").read_text(encoding="utf-8"))
-    key = catalog["customer_templates"].get(inspection.customer_code.upper(), catalog["default_template"])
+    report_type = getattr(inspection, "report_type", "STANDARD")
+    if report_type == "COMBINED":
+        key = "roda"
+    elif report_type == "PACKING":
+        packing_map = catalog.get("packing_templates", {})
+        key = packing_map.get(inspection.customer_code.upper(), packing_map.get("DEFAULT", "rh_packing"))
+    else:
+        key = catalog["customer_templates"].get(inspection.customer_code.upper(), catalog["default_template"])
     config = catalog["templates"][key]
     path = TEMPLATE_DIR / config["output_template"]
     return config, config["status"] == "READY" and path.is_file()
@@ -55,6 +76,7 @@ def paragraph_format(paragraph, size: int = 9, bold: bool = False) -> None:
 
 def heading(document, label: str, page_break: bool = False) -> None:
     paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.page_break_before = page_break
     paragraph.paragraph_format.keep_with_next = True
     paragraph.paragraph_format.space_before = Pt(7)
@@ -68,18 +90,25 @@ def fill_header(document, inspection: Inspection, config: dict) -> None:
 
     dimension_axes = config.get("dimension_axes", ["L", "W", "H"])
     box_axes = config.get("box_axes", ["L", "W", "H"])
-    date_text = inspection.date.strftime("%y%m%d")
+    date_format = config.get("date_format", "%y%m%d")
+    date_text = inspection.date.strftime(date_format)
     if config.get("date_label") == "DATE-LOC" and inspection.location:
         date_text += "-" + inspection.location
+    inspect_text = (
+        config.get("inline_label", "PACKING") if inspection.inspection_type == "PACKING"
+        else config.get("inline_label", "INLINE") if inspection.inspection_type == "INLINE"
+        else inspection.inspection_type.replace("_", " ")
+    )
+    include_product_dim = config.get("include_product_dim", True)
     values = {
         "DESC": inspection.product_name,
-        "INSPECT": config.get("inline_label", "INLINE") if inspection.inspection_type == "INLINE" else inspection.inspection_type.replace("_", " "),
+        "INSPECT": inspect_text,
         "CUSTOMER": inspection.customer_name, "PO": inspection.po,
         "DATE": date_text, "QC": inspection.qc_name,
         "QTY": str(inspection.quantity), "AQL": inspection.aql or "",
     }
     for index, axis in enumerate(dimension_axes, 1):
-        values[f"DIM_{index}"] = number(inspection.product_dimensions.get(axis))
+        values[f"DIM_{index}"] = number(inspection.product_dimensions.get(axis)) if include_product_dim else ""
     for index, axis in enumerate(box_axes, 1):
         values[f"BOX_{index}"] = number(inspection.box_dimensions.get(axis))
 
@@ -102,33 +131,37 @@ def fill_header(document, inspection: Inspection, config: dict) -> None:
         return True
 
     for table in document.sections[0].header.tables:
-        # Template selebar ~18,38 cm pada area isi 18 cm. Skala SEKALI dari total
-        # grid agar kolom tetap segaris antar-baris; skala per-baris merusak
-        # kesejajaran vertikal.
         table.autofit = False
+        target_twips = int(Cm(18).twips)
         grid_columns = list(table._tbl.tblGrid.gridCol_lst)
         grid_total = sum(column.w for column in grid_columns)
-        for column in grid_columns:
-            column.w = int(column.w * Cm(18).emu / grid_total)
-        for row in table.rows:
-            for cell in row._tr.tc_lst:
-                cell.width = int(cell.width * Cm(18).emu / grid_total)
+        if grid_total != target_twips and grid_total > 0:
+            for column in grid_columns:
+                column.w = int(column.w * target_twips / grid_total)
+            for row in table.rows:
+                for cell in row._tr.tc_lst:
+                    cell.width = int(cell.width * Cm(18).emu / grid_total)
         table_width = table._tbl.tblPr.find(qn("w:tblW"))
         if table_width is None:
             table_width = OxmlElement("w:tblW")
             table._tbl.tblPr.insert(0, table_width)
         table_width.set(qn("w:type"), "dxa")
-        table_width.set(qn("w:w"), str(Cm(18).twips))
-        dynamic: set[int] = set()
-        for row in table.rows:
+        table_width.set(qn("w:w"), str(target_twips))
+        for row_idx, row in enumerate(table.rows):
+            trPr = row._tr.get_or_add_trPr()
+            trHeight = trPr.find(qn("w:trHeight"))
+            if trHeight is None:
+                trHeight = OxmlElement("w:trHeight")
+                trPr.append(trHeight)
+            if not trHeight.get(qn("w:val")):
+                trHeight.set(qn("w:val"), "360" if row_idx == 0 else "320")
+                trHeight.set(qn("w:hRule"), "exact")
             for cell in row.cells:
                 cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 for paragraph in cell.paragraphs:
                     if replace_placeholders(paragraph):
-                        paragraph_format(paragraph, 9)
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
+                        font_size = 8 if row_idx == len(table.rows) - 1 else 9
+                        paragraph_format(paragraph, font_size)
                     paragraph.paragraph_format.space_before = Pt(0)
                     paragraph.paragraph_format.space_after = Pt(0)
     remaining = "\n".join(cell.text for table in document.sections[0].header.tables for row in table.rows for cell in row.cells)
@@ -222,7 +255,8 @@ def row_spans(cols: int, count: int) -> list[int]:
 
 def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
                *, width_cm: float = 18, border: bool = True,
-               single_height_cm: float = 10, cols: int = 2) -> None:
+               single_height_cm: float = 10, cols: int = 2,
+               hide_captions: bool = False) -> None:
     if not photos:
         return
     cols = min(2, max(1, cols))
@@ -257,7 +291,7 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
                          cell_photo_width(cell),
                          single_height_cm if len(photos) == 1 else 5.8)
             position += span
-        captions = [photo.caption.strip() for photo in chunk if photo.caption and photo.caption.strip()]
+        captions = [] if hide_captions else [photo.caption.strip() for photo in chunk if photo.caption and photo.caption.strip()]
         if captions:
             caption_cell = table.add_row().cells[0]
             if cols > 1:
@@ -268,12 +302,10 @@ def photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
             paragraph_format(caption, 8, True)
 
 
-def template_photo_grid(document, photos: list[InspectionPhoto], settings: Settings,
+def template_photo_grid(document, photos: list[InspectionPhoto | None], settings: Settings,
                         layout: dict, *, width_cm: float = 18) -> None:
     """Render the selected fixed-slot page while retaining one caption per photo."""
     columns = layout["columns"]
-    if len(photos) != layout["photo_count"]:
-        raise ReportAssetUnavailable("Photo page does not have every required photo slot filled")
     widths = tuple(width_cm / columns for _ in range(columns))
     table = document.add_table(rows=0, cols=columns)
     photo_table_width(table, widths)
@@ -308,11 +340,12 @@ def template_photo_grid(document, photos: list[InspectionPhoto], settings: Setti
             paragraph = photo_row.cells[index].paragraphs[0]
             photo_paragraph(paragraph)
             paragraph.paragraph_format.keep_with_next = True
-            insert_photo(paragraph, photo, settings,
-                         max_width_cm=cell_photo_width(photo_row.cells[index]),
-                         max_height_cm=layout["max_photo_height_cm"])
+            if photo is not None:
+                insert_photo(paragraph, photo, settings,
+                             max_width_cm=cell_photo_width(photo_row.cells[index]),
+                             max_height_cm=layout["max_photo_height_cm"])
             caption = caption_row.cells[index].paragraphs[0]
-            caption.text = (photo.caption or "").strip()
+            caption.text = (photo.caption or "").strip() if photo is not None else ""
             caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph_format(caption, 8, True)
         for row in (photo_row, caption_row):
@@ -321,7 +354,7 @@ def template_photo_grid(document, photos: list[InspectionPhoto], settings: Setti
 
 def dimension_photo_blocks(document, measurements: list[Measurement], photos: list[InspectionPhoto],
                            settings: Settings, *, width_cm: float = 18, border: bool = True,
-                           cols: int = 2) -> None:
+                           cols: int = 2, label_position: str = "top") -> None:
     for measurement in measurements:
         pair = sorted((photo for photo in photos if photo.measurement_id == measurement.id),
                       key=lambda photo: (photo.dimension_slot or 0, photo.id))
@@ -335,10 +368,11 @@ def dimension_photo_blocks(document, measurements: list[Measurement], photos: li
             label_cell = label_cell.merge(label_row.cells[cols - 1])
         label_cell.text = measurement.label
         if any(value is not None for value in (measurement.value, measurement.value_min, measurement.value_max)):
-            label_cell.text += " — " + value_text(measurement)
+            label_cell.text += (" " if label_position == "bottom" else " — ") + value_text(measurement)
         paragraph_format(label_cell.paragraphs[0], 9, True)
         label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        table._tbl.insert(table._tbl.index(table.rows[0]._tr), label_row._tr)
+        if label_position == "top":
+            table._tbl.insert(table._tbl.index(table.rows[0]._tr), label_row._tr)
         for index, row in enumerate(table.rows):
             row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
             for cell in row.cells:
@@ -370,6 +404,43 @@ def combined_section_block(document, sections: list[str], photos_by_section: dic
         else:
             photo_grid(cell, photos_by_section[section], settings, width_cm=17.2,
                        border=False, single_height_cm=8.5, cols=layout_cols(layout, section))
+
+
+def resolve_mc_range_text(mc_photos: list[InspectionPhoto], measurements: list[Measurement], session: Session) -> str | None:
+    all_values: list[float] = []
+
+    for photo in mc_photos:
+        if photo.caption:
+            caption_clean = photo.caption.strip()
+            if "range mc" in caption_clean.lower():
+                return caption_clean
+            matches = re.findall(r"\b\d+(?:\.\d+)?\b", caption_clean)
+            for m in matches:
+                try:
+                    val = float(m)
+                    if 1.0 <= val <= 50.0:
+                        all_values.append(val)
+                except ValueError:
+                    pass
+
+    mc_measurements = [m for m in measurements if m.category == "MC"]
+    for m in mc_measurements:
+        if m.value is not None:
+            all_values.append(float(m.value))
+        if m.value_min is not None:
+            all_values.append(float(m.value_min))
+        if m.value_max is not None:
+            all_values.append(float(m.value_max))
+        readings = session.exec(select(TestReading).where(TestReading.measurement_id == m.id)).all()
+        for r in readings:
+            if r.value is not None:
+                all_values.append(float(r.value))
+
+    if all_values:
+        min_val = min(all_values)
+        max_val = max(all_values)
+        return f"Range MC Check is {min_val:g}% - {max_val:g}%"
+    return None
 
 
 def value_text(measurement: Measurement) -> str:
@@ -526,7 +597,7 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
         .order_by(InspectionPhoto.sort_order, InspectionPhoto.id)).all()
     measurements = session.exec(select(Measurement).where(Measurement.inspection_id == inspection.id)
         .order_by(Measurement.sort_order, Measurement.id)).all()
-    dimensions = [measurement for measurement in measurements if measurement.category == "DIMENSION"]
+    dimensions = [measurement for measurement in measurements if measurement.category in ("DIMENSION", "BOX_DIMENSION")]
     issues = session.exec(select(Issue).where(Issue.inspection_id == inspection.id)
         .order_by(Issue.sort_order, Issue.id)).all()
     assigned_photo_ids = {photo_id for page in inspection.photo_pages or []
@@ -554,13 +625,48 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
             consumed.update(block["sections"])
             started = True
             continue
-        if section == "DIMENSION":
-            heading(document, SECTION_TITLES[section], page_break=started and section in break_before)
-            dimension_photo_blocks(document, dimensions, section_photos, settings,
-                                   cols=layout_cols(layout, section))
+        if section in ("DIMENSION", "BOX_DIMENSION"):
+            target_measurements = [m for m in measurements if m.category == section]
+            if target_measurements:
+                heading(document, section_title(config, section), page_break=started and section in break_before)
+                dimension_photo_blocks(document, target_measurements, section_photos, settings,
+                                       cols=layout_cols(layout, section),
+                                       label_position=config.get("dimension_label_position", "top"))
+                started = True
+            continue
+        if section == "MC":
+            heading(document, section_title(config, section),
+                    page_break=started and section in break_before)
+            range_text = resolve_mc_range_text(section_photos, measurements, session)
+            only_numbers = all(
+                not p.caption or bool(re.match(r"^[\d\.\s%–\-]+$", p.caption.strip()))
+                for p in section_photos
+            )
+            photo_grid(document, section_photos, settings,
+                       cols=layout_cols(layout, section),
+                       hide_captions=bool(range_text and only_numbers))
+            if range_text:
+                p_range = document.add_paragraph(range_text)
+                p_range.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_range.paragraph_format.space_before = Pt(4)
+                p_range.paragraph_format.space_after = Pt(8)
+                paragraph_format(p_range, 9, bold=True)
             started = True
             continue
-        heading(document, SECTION_TITLES.get(section, section.replace("_", " ").title()),
+
+        if section == "INSPECTED_PRODUCT":
+            qty = inspection.inspected_quantity or inspection.quantity or 1
+            for p in section_photos:
+                if not p.caption or not p.caption.strip():
+                    p.caption = f"inspect {qty} pcs"
+                elif not p.caption.lower().startswith("inspect") and "pcs" not in p.caption.lower():
+                    p.caption = f"inspect {p.caption.strip()} pcs"
+            photo_grid(document, section_photos, settings,
+                       cols=1, single_height_cm=9.5)
+            started = True
+            continue
+
+        heading(document, section_title(config, section),
                 page_break=started and section in break_before)
         photo_grid(document, section_photos, settings,
                    cols=layout_cols(layout, section))
@@ -570,23 +676,25 @@ def generate_report(session: Session, inspection: Inspection, settings: Settings
         layout_config = photo_layout_by_id(page["template_id"])
         if layout_config is None:
             raise ReportAssetUnavailable("Selected photo page layout is unavailable")
-        page_photos = [photos_by_id[photo_id] for photo_id in page["photo_ids"]]
+        page_photos = [photos_by_id.get(photo_id) for photo_id in page["photo_ids"]]
         if started:
             document.add_page_break()
-        title = SECTION_TITLES.get(page["section"], page["section"].replace("_", " ").title())
+        title = section_title(config, page["section"])
         heading(document, f"{title} · {layout_config['code']} · Page {index}")
         template_photo_grid(document, page_photos, settings, layout_config)
         started = True
-    measurement_table(document, measurements, session)
+    if config.get("include_measurement_table", False):
+        measurement_table(document, measurements, session)
     for issue in issues:
         issue_block(document, issue, [photo for photo in photos if photo.issue_id == issue.id], settings)
-    heading(document, "Conclusion", page_break=False)
-    conclusion = inspection.conclusion or f"Inspection recorded. {len(issues)} issue(s) documented."
-    paragraph = document.add_paragraph(conclusion)
-    paragraph_format(paragraph, 9)
-    if inspection.communication_status:
-        paragraph = document.add_paragraph(inspection.communication_status)
+    if config.get("include_conclusion", True):
+        heading(document, "Conclusion", page_break=False)
+        conclusion = inspection.conclusion or f"Inspection recorded. {len(issues)} issue(s) documented."
+        paragraph = document.add_paragraph(conclusion)
         paragraph_format(paragraph, 9)
+        if inspection.communication_status:
+            paragraph = document.add_paragraph(inspection.communication_status)
+            paragraph_format(paragraph, 9)
     fixed_time = datetime(2000, 1, 1)
     document.core_properties.created = fixed_time
     document.core_properties.modified = fixed_time

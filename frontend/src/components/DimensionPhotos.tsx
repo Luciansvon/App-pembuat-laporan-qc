@@ -16,7 +16,8 @@ export function DimensionPair({ inspection, measurement, run, askConfirm }: { in
     if (photos.length + files.length > 2) { setError('Setiap ukuran harus terdiri dari dua foto. Pilih maksimal foto yang masih kosong.'); return }
     setError('')
     setUploading(true)
-    try { await run(() => api.upload(inspection.id, 'DIMENSION', files, undefined, measurement.id, selectedSlot.current), `Foto ${measurement.label} tersimpan.`) }
+    const targetSection = measurement.category === 'BOX_DIMENSION' ? 'BOX_DIMENSION' : 'DIMENSION'
+    try { await run(() => api.upload(inspection.id, targetSection, files, undefined, measurement.id, selectedSlot.current), `Foto ${measurement.label} tersimpan.`) }
     finally { setUploading(false) }
   }
   function handleDelete(photoId: string, slot: 1 | 2) {
@@ -52,10 +53,85 @@ export function DimensionPair({ inspection, measurement, run, askConfirm }: { in
 }
 
 export default function DimensionPhotos({ inspection, run, addCustom, askConfirm }: { inspection: Inspection; run: Action; addCustom: () => void; askConfirm?: (options: ConfirmOptions) => void }) {
+  const isCombined = inspection.report_type === 'COMBINED' || inspection.customer_code?.toUpperCase() === 'RODA'
+  const isPacking = inspection.report_type === 'PACKING'
+  const showBoxDimensions = isCombined || isPacking || inspection.measurements.some(item => item.category === 'BOX_DIMENSION')
+  const showProductDimensions = !isPacking || inspection.measurements.some(item => item.category === 'DIMENSION')
+  const boxDimensionPresets = isPacking ? ['Width', 'Depth', 'Height'] : ['Length', 'Width', 'Height']
   const dimensions = inspection.measurements.filter(item => item.category === 'DIMENSION')
-  return <section className="dimension-groups" aria-label="Foto per ukuran dimension"><div className="dimension-pair-heading"><h3>Dimension · dua foto per ukuran</h3><label>Layout laporan<select value={inspection.photo_layout?.['DIMENSION'] ?? 2} onChange={(event) => void run(() => api.patchInspection(inspection.id, { revision: inspection.revision, photo_layout: { ...(inspection.photo_layout || {}), DIMENSION: Number(event.target.value) } }), 'Layout laporan tersimpan.')} aria-label="Jumlah foto per baris untuk dimension">{[1, 2].map((count) => <option value={count} key={count}>{count} foto/baris</option>)}</select></label><button type="button" className="text-action" onClick={addCustom}>Tambah ukuran lain</button></div>
-    <div className="dimension-add-buttons">{['Length', 'Width', 'Depth', 'Height'].map(label => <button type="button" className="small-action" key={label} disabled={dimensions.some(item => item.label.toLowerCase() === label.toLowerCase())} onClick={() => void run(() => api.addMeasurement(inspection.id, { category: 'DIMENSION', label, unit: 'mm', sort_order: inspection.measurements.length }), `Ukuran ${label} ditambahkan.`)}>＋ {label}</button>)}</div>
-    {dimensions.map(measurement => <DimensionPair key={measurement.id} inspection={inspection} measurement={measurement} run={run} askConfirm={askConfirm} />)}
-    {!dimensions.length && <p className="empty-inline">Pilih ukuran di atas, lalu isi kedua slot fotonya.</p>}
-  </section>
+  const boxDimensions = inspection.measurements.filter(item => item.category === 'BOX_DIMENSION')
+
+  const rodaDimensionPresets = [
+    'Width:', 'Depth:', 'Height:',
+    'front leg Width:', 'rear leg Width:', 'foot Depth:',
+    'Height Arm:', 'Height frame seat:', 'Side frame height:'
+  ]
+
+  return (
+    <div className="dimension-container">
+      {showBoxDimensions && (
+        <section className="dimension-groups mb-6" aria-label="Foto per ukuran box dimension">
+          <div className="dimension-pair-heading">
+            <h3>Box Dimension · Dimensi Kardus Kemasan</h3>
+          </div>
+          <div className="dimension-add-buttons">
+            {boxDimensionPresets.map(label => (
+              <button
+                type="button"
+                className="small-action"
+                key={label}
+                disabled={boxDimensions.some(item => item.label.toLowerCase() === label.toLowerCase())}
+                onClick={() => void run(() => api.addMeasurement(inspection.id, { category: 'BOX_DIMENSION', label, unit: 'mm', sort_order: inspection.measurements.length }), `Ukuran kardus ${label} ditambahkan.`)}
+              >
+                ＋ {label}
+              </button>
+            ))}
+          </div>
+          {boxDimensions.map(measurement => (
+            <DimensionPair key={measurement.id} inspection={inspection} measurement={measurement} run={run} askConfirm={askConfirm} />
+          ))}
+          {!boxDimensions.length && <p className="empty-inline">Pilih ukuran kardus ({boxDimensionPresets.join(', ')}) di atas lalu unggah sepasang fotonya.</p>}
+        </section>
+      )}
+
+      {showProductDimensions && (
+        <section className="dimension-groups" aria-label="Foto per ukuran dimension">
+        <div className="dimension-pair-heading">
+          <h3>{isCombined ? 'Product Dimension · Dimensi Kursi' : 'Dimension · dua foto per ukuran'}</h3>
+          <label>
+            Layout laporan
+            <select
+              value={inspection.photo_layout?.['DIMENSION'] ?? 2}
+              onChange={(event) => void run(async () => {
+                const latest = await api.inspection(inspection.id)
+                return api.patchInspection(inspection.id, { revision: latest.revision, photo_layout: { ...(latest.photo_layout || {}), DIMENSION: Number(event.target.value) } })
+              }, 'Layout laporan tersimpan.')}
+              aria-label="Jumlah foto per baris untuk dimension"
+            >
+              {[1, 2].map((count) => <option value={count} key={count}>{count} foto/baris</option>)}
+            </select>
+          </label>
+          <button type="button" className="text-action" onClick={addCustom}>Tambah ukuran lain</button>
+        </div>
+        <div className="dimension-add-buttons">
+          {(isCombined ? rodaDimensionPresets : ['Length', 'Width', 'Depth', 'Height']).map(label => (
+            <button
+              type="button"
+              className="small-action"
+              key={label}
+              disabled={dimensions.some(item => item.label.toLowerCase() === label.toLowerCase())}
+              onClick={() => void run(() => api.addMeasurement(inspection.id, { category: 'DIMENSION', label, unit: 'mm', sort_order: inspection.measurements.length }), `Ukuran ${label} ditambahkan.`)}
+            >
+              ＋ {label}
+            </button>
+          ))}
+        </div>
+        {dimensions.map(measurement => (
+          <DimensionPair key={measurement.id} inspection={inspection} measurement={measurement} run={run} askConfirm={askConfirm} />
+        ))}
+        {!dimensions.length && <p className="empty-inline">Pilih ukuran di atas, lalu isi kedua slot fotonya.</p>}
+        </section>
+      )}
+    </div>
+  )
 }

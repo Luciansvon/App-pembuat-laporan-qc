@@ -6,11 +6,17 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-InspectionType = Literal["INLINE", "FINAL", "PRE_SHIPMENT", "OTHER"]
-Section = Literal["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "ISSUE", "OTHER"]
-Category = Literal["DIMENSION", "MC", "GLOSS", "GAP", "RADIUS", "OTHER"]
+InspectionType = Literal["INLINE", "FINAL", "PRE_SHIPMENT", "PACKING", "OTHER"]
+Section = Literal[
+    "PACKING_ATTRIBUTE", "BOX_DIMENSION", "PACKING_METHOD", "INNER_SKU_GLIDE",
+    "PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAIN_HOLE", "DRAWING", "DIMENSION",
+    "LEVEL_CHECK", "MAL_CHECK", "RADIUS", "RADIUS_R44", "RADIUS_R10",
+    "MC", "INSPECTED_PRODUCT", "GLOSS", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "ISSUE", "OTHER"
+]
+Category = Literal["DIMENSION", "BOX_DIMENSION", "MC", "GLOSS", "GAP", "RADIUS", "LEVEL_CHECK", "MAL_CHECK", "OTHER"]
 IssueStatus = Literal["OPEN", "REPAIRED", "ACCEPTED"]
 Status = Literal["DRAFT", "IN_PROGRESS", "REVIEW", "COMPLETED"]
+ReportType = Literal["STANDARD", "COMBINED", "PACKING"]
 
 
 def nonblank(value: str) -> str:
@@ -63,6 +69,7 @@ class InspectionIn(StrictModel):
     quantity: int = Field(gt=0)
     aql: str | None = Field(default=None, max_length=80)
     inspected_quantity: int | None = Field(default=None, ge=0)
+    report_type: ReportType = "STANDARD"
     product_dimensions: dict[str, float] | None = None
     box_dimensions: dict[str, float] = Field(default_factory=dict)
     _po = field_validator("po")(nonblank)
@@ -92,6 +99,7 @@ class InspectionPatch(StrictModel):
     quantity: int | None = Field(default=None, gt=0)
     aql: str | None = Field(default=None, max_length=80)
     inspected_quantity: int | None = Field(default=None, ge=0)
+    report_type: ReportType = "STANDARD"
     product_dimensions: dict[str, float] | None = None
     box_dimensions: dict[str, float] | None = None
     photo_layout: dict[str, int] | None = None

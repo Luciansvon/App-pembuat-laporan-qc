@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 node_modules/
 frontend/dist/
+dist/
 frontend/*.tsbuildinfo
 .playwright-cli/
 .artifacts/
@@ -23,4 +24,5 @@ frontend/public/icon.svg
 templates/references/*.docx
 *.sqlite*
 *.db
+maskot-app-laporan/
 

@@ -59,6 +59,8 @@ public final class InspectraBridge extends WebChromeClient {
         webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + " InspectraAndroid/0.1.3");
         webView.getSettings().setAllowFileAccess(false);
         webView.getSettings().setAllowContentAccess(true);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.getSettings().setLoadWithOverviewMode(true);
         webView.setWebChromeClient(this);
         // API 35 enforces edge-to-edge: keep controls clear of cutouts, bars and keyboard.
         View content = activity.findViewById(android.R.id.content);

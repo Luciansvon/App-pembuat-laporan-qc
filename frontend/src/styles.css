@@ -104,7 +104,7 @@ a:focus-visible {
 }
 .rail nav a:hover {
   background: #2b4b3f;
-  border-left-color: #d0a55d;
+  border-left-color: transparent;
 }
 .nav-index {
   font-size: 10px;

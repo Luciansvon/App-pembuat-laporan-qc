@@ -42,6 +42,8 @@ def wait_for_server(url: str, max_tries: int = 80) -> bool:
 def log_msg(msg: str) -> None:
     try:
         log_path = Path(os.environ.get("TEMP", ".")) / "qc_launcher.log"
+        if log_path.is_file() and log_path.stat().st_size > 1_000_000:
+            log_path.replace(log_path.with_suffix(".log.old"))
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
     except Exception:

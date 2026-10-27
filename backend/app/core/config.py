@@ -13,6 +13,7 @@ RESOURCE_ROOT = Path(os.environ.get("QC_RESOURCE_ROOT", str(PROJECT_ROOT))).reso
 class Settings:
     data_dir: Path
     allowed_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
+    allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "testserver")
 
     @property
     def database_path(self) -> Path:
@@ -26,5 +27,10 @@ def load_settings() -> Settings:
     ).split(",") if origin.strip())
     if not origins or "*" in origins:
         raise ValueError("QC_ALLOWED_ORIGINS must contain explicit origins")
-    return Settings(data_dir=data_dir, allowed_origins=origins)
+    hosts = tuple(host.strip() for host in os.environ.get(
+        "QC_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver"
+    ).split(",") if host.strip())
+    if not hosts or "*" in hosts:
+        raise ValueError("QC_ALLOWED_HOSTS must contain explicit hosts")
+    return Settings(data_dir=data_dir, allowed_origins=origins, allowed_hosts=hosts)
 

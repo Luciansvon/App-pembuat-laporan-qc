@@ -57,6 +57,7 @@ class Inspection(SQLModel, table=True):
     photo_layout: dict[str, int] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
     photo_pages: list[dict[str, Any]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     status: str = "DRAFT"
+    report_type: str = "STANDARD"
     conclusion: str | None = None
     communication_status: str | None = None
     revision: int = 1

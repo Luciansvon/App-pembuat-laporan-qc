@@ -23,8 +23,9 @@ def prepare(destination: Path) -> Path:
     shutil.copy2(ROOT / "backend" / "alembic.ini", destination / "backend" / "alembic.ini")
     templates = destination / "templates"
     templates.mkdir()
-    for name in ("catalog.json", "default.docx", "poliform.docx", "rh.docx"):
-        shutil.copy2(ROOT / "templates" / name, templates / name)
+    for item in (ROOT / "templates").iterdir():
+        if item.is_file() and item.name != "README.md":
+            shutil.copy2(item, templates / item.name)
     shutil.copytree(ROOT / "frontend" / "dist", destination / "frontend" / "dist")
     return destination
 

@@ -390,7 +390,7 @@ def delete_issue(item_id: str, session: Session = Depends(db)) -> dict:
 def dimension_slots(session: Session, inspection_id: str, measurement_id: str,
                     count: int, exclude_photo: str | None = None, preferred_slot: int | None = None) -> list[int]:
     measurement = require(session, Measurement, measurement_id)
-    if measurement.inspection_id != inspection_id or measurement.category != "DIMENSION":
+    if measurement.inspection_id != inspection_id or measurement.category not in ("DIMENSION", "BOX_DIMENSION"):
         raise HTTPException(status_code=422, detail="Choose a dimension from this inspection")
     linked = session.exec(select(InspectionPhoto).where(InspectionPhoto.measurement_id == measurement_id)).all()
     occupied = {photo.dimension_slot for photo in linked if photo.id != exclude_photo}
@@ -415,12 +415,12 @@ def create_photo(item_id: str, request: Request, section: Section = Form(),
     inspection = require(session, Inspection, item_id)
     slots: list[int] = []
     if measurement_id:
-        if section != "DIMENSION" or issue_id:
+        if section not in ("DIMENSION", "BOX_DIMENSION") or issue_id:
             raise HTTPException(status_code=422, detail="Dimension photos cannot be linked to another section or an issue")
         slots = dimension_slots(session, item_id, measurement_id, len(files), preferred_slot=dimension_slot)
     elif dimension_slot is not None:
         raise HTTPException(status_code=422, detail="Choose the dimension for this photo slot first")
-    elif section == "DIMENSION":
+    elif section in ("DIMENSION", "BOX_DIMENSION"):
         raise HTTPException(status_code=422, detail="Choose the dimension for these photos first")
     if issue_id and require(session, Issue, issue_id).inspection_id != item_id:
         raise HTTPException(status_code=422, detail="Issue belongs to another inspection")
@@ -471,9 +471,9 @@ def patch_photo(item_id: str, data: PhotoPatch, request: Request,
         photo.id in page.get("photo_ids", []) for page in inspection.photo_pages or []
     ):
         raise HTTPException(status_code=409, detail="Remove this photo from its report page before moving it to another section")
-    if target_section != "DIMENSION":
+    if target_section not in ("DIMENSION", "BOX_DIMENSION"):
         if changes.get("measurement_id"):
-            raise HTTPException(status_code=422, detail="Only DIMENSION photos can be linked to a dimension")
+            raise HTTPException(status_code=422, detail="Only DIMENSION or BOX_DIMENSION photos can be linked to a dimension")
         changes["measurement_id"] = changes["dimension_slot"] = None
     elif target_measurement:
         if changes.get("issue_id", photo.issue_id):
@@ -482,7 +482,22 @@ def patch_photo(item_id: str, data: PhotoPatch, request: Request,
             changes["dimension_slot"] = dimension_slots(session, photo.inspection_id, target_measurement, 1, photo.id)[0]
         changes["measurement_id"] = target_measurement
     else:
-        raise HTTPException(status_code=422, detail="Dimension photos require a dimension measurement")
+        candidates = session.exec(
+            select(Measurement)
+            .where(Measurement.inspection_id == photo.inspection_id, Measurement.category == target_section)
+            .order_by(Measurement.sort_order, Measurement.id)
+        ).all()
+        assigned = False
+        for candidate in candidates:
+            available_slots = dimension_slots(session, photo.inspection_id, candidate.id, 1, photo.id)
+            if available_slots:
+                changes["measurement_id"] = candidate.id
+                changes["dimension_slot"] = available_slots[0]
+                assigned = True
+                break
+        if not assigned:
+            sec_name = "dimensi kardus" if target_section == "BOX_DIMENSION" else "dimensi produk"
+            raise HTTPException(status_code=422, detail=f"Tambahkan ukuran {sec_name} terlebih dahulu sebelum memindahkan foto ke bagian ini.")
     if changes.get("issue_id") and require(session, Issue, changes["issue_id"]).inspection_id != photo.inspection_id:
         raise HTTPException(status_code=422, detail="Issue belongs to another inspection")
     for key, value in changes.items():

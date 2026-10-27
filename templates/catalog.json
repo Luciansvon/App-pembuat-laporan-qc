@@ -1,8 +1,65 @@
 {
   "schema_version": 1,
-  "customer_templates": {"POLIFORM": "poliform", "RH": "rh"},
+  "customer_templates": {
+    "POLIFORM": "poliform",
+    "RH": "rh",
+    "RODA": "roda",
+    "RESTIRATION HARDWARE": "rh",
+    "RESTORATION HARDWARE": "rh"
+  },
   "default_template": "default",
   "templates": {
+    "roda": {
+      "status": "READY",
+      "reference": "references/roda.docx",
+      "reference_sha256": "c4586e2affa3e79ad541f952820cf4f9e3a298f982c99d93234154198b8c71f8",
+      "output_template": "roda.docx",
+      "date_label": "DATE-LOC",
+      "inline_label": "IN LINE",
+      "date_format": "%d%m%y",
+      "dimension_axes": [
+        "W",
+        "D",
+        "H"
+      ],
+      "box_axes": [
+        "L",
+        "W",
+        "H"
+      ],
+      "dimension_label_position": "bottom",
+      "sections": [
+        "PACKING_ATTRIBUTE",
+        "BOX_DIMENSION",
+        "PACKING_METHOD",
+        "PRODUCT_VIEW",
+        "PRODUCT_DETAIL",
+        "DRAIN_HOLE",
+        "DRAWING",
+        "DIMENSION",
+        "LEVEL_CHECK",
+        "MAL_CHECK",
+        "RADIUS",
+        "MC",
+        "INSPECTED_PRODUCT",
+        "GLOSS",
+        "OTHER",
+        "ISSUE",
+        "CONCLUSION"
+      ],
+      "break_before": [
+        "BOX_DIMENSION",
+        "PACKING_METHOD",
+        "PRODUCT_VIEW",
+        "DRAWING",
+        "DIMENSION",
+        "LEVEL_CHECK",
+        "MAL_CHECK",
+        "RADIUS",
+        "ISSUE"
+      ],
+      "include_measurement_table": false
+    },
     "poliform": {
       "status": "READY",
       "reference": "references/poliform.docx",
@@ -10,11 +67,51 @@
       "output_template": "poliform.docx",
       "date_label": "DATE",
       "inline_label": "INLINE",
-      "dimension_axes": ["L", "W", "H"],
-      "box_axes": ["L", "W", "H"],
-      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "RADIUS", "MC", "GAP_SLIDE", "CORNER", "SWATCH", "TRIAL_BACKREST", "OTHER", "ISSUE", "CONCLUSION"],
-      "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
-      "break_before": ["DIMENSION"]
+      "dimension_axes": [
+        "L",
+        "W",
+        "H"
+      ],
+      "box_axes": [
+        "L",
+        "W",
+        "H"
+      ],
+      "sections": [
+        "PRODUCT_VIEW",
+        "PRODUCT_DETAIL",
+        "DRAWING",
+        "DIMENSION",
+        "RADIUS",
+        "MC",
+        "INSPECTED_PRODUCT",
+        "GAP_SLIDE",
+        "CORNER",
+        "SWATCH",
+        "TRIAL_BACKREST",
+        "OTHER",
+        "ISSUE",
+        "CONCLUSION"
+      ],
+      "combined_blocks": [
+        {
+          "sections": [
+            "DRAWING",
+            "DIMENSION"
+          ],
+          "max_counts": [
+            1,
+            2
+          ]
+        }
+      ],
+      "break_before": [
+        "DIMENSION"
+      ],
+      "mandatory_checks": [
+        "MC"
+      ],
+      "include_measurement_table": false
     },
     "rh": {
       "status": "READY",
@@ -23,10 +120,34 @@
       "output_template": "rh.docx",
       "date_label": "DATE-LOC",
       "inline_label": "IN LINE",
-      "dimension_axes": ["L", "D", "H"],
-      "box_axes": ["W", "D", "H"],
-      "sections": ["PRODUCT_VIEW", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
-      "break_before": ["DIMENSION"]
+      "dimension_axes": [
+        "L",
+        "D",
+        "H"
+      ],
+      "box_axes": [
+        "W",
+        "D",
+        "H"
+      ],
+      "sections": [
+        "PRODUCT_VIEW",
+        "DIMENSION",
+        "MC",
+        "INSPECTED_PRODUCT",
+        "GLOSS",
+        "SWATCH",
+        "OTHER",
+        "ISSUE",
+        "CONCLUSION"
+      ],
+      "break_before": [
+        "DIMENSION"
+      ],
+      "mandatory_checks": [
+        "MC"
+      ],
+      "include_measurement_table": false
     },
     "default": {
       "status": "READY",
@@ -35,12 +156,99 @@
       "output_template": "default.docx",
       "date_label": "DATE",
       "inline_label": "INLINE",
-      "dimension_axes": ["L", "W", "H"],
-      "box_axes": ["L", "W", "H"],
-      "sections": ["PRODUCT_VIEW", "PRODUCT_DETAIL", "DRAWING", "DIMENSION", "MC", "GLOSS", "SWATCH", "OTHER", "ISSUE", "CONCLUSION"],
-      "combined_blocks": [{"sections": ["DRAWING", "DIMENSION"], "max_counts": [1, 2]}],
-      "break_before": ["DIMENSION"]
+      "dimension_axes": [
+        "L",
+        "W",
+        "H"
+      ],
+      "box_axes": [
+        "L",
+        "W",
+        "H"
+      ],
+      "sections": [
+        "PRODUCT_VIEW",
+        "PRODUCT_DETAIL",
+        "DRAWING",
+        "DIMENSION",
+        "MC",
+        "INSPECTED_PRODUCT",
+        "GLOSS",
+        "SWATCH",
+        "OTHER",
+        "ISSUE",
+        "CONCLUSION"
+      ],
+      "combined_blocks": [
+        {
+          "sections": [
+            "DRAWING",
+            "DIMENSION"
+          ],
+          "max_counts": [
+            1,
+            2
+          ]
+        }
+      ],
+      "break_before": [
+        "DIMENSION"
+      ],
+      "mandatory_checks": [
+        "MC"
+      ],
+      "include_measurement_table": false
+    },
+    "rh_packing": {
+      "status": "READY",
+      "reference": "references/rh_packing.docx",
+      "reference_sha256": "030490c38d1e64f00e4bdb690d4819d8ed281dba3f22c5e9174839385aa92d5c",
+      "output_template": "rh_packing.docx",
+      "date_label": "DATE-LOC",
+      "inline_label": "PACKING",
+      "date_format": "%y%m%d",
+      "header_inspect_col": 11,
+      "dimension_axes": [
+        "W",
+        "D",
+        "H"
+      ],
+      "box_axes": [
+        "W",
+        "D",
+        "H"
+      ],
+      "dimension_label_position": "bottom",
+      "sections": [
+        "PACKING_ATTRIBUTE",
+        "BOX_DIMENSION",
+        "PACKING_METHOD",
+        "INNER_SKU_GLIDE",
+        "MC",
+        "GLOSS",
+        "OTHER",
+        "CONCLUSION"
+      ],
+      "break_before": [
+        "BOX_DIMENSION",
+        "PACKING_METHOD",
+        "INNER_SKU_GLIDE"
+      ],
+      "section_titles": {
+        "PACKING_ATTRIBUTE": "ATRIBUTE (Box & Pack)",
+        "BOX_DIMENSION": "Box Dimension",
+        "PACKING_METHOD": "Packing Method",
+        "INNER_SKU_GLIDE": "Inner SKU & Fixed Glide"
+      },
+      "include_measurement_table": false,
+      "include_conclusion": false,
+      "include_product_dim": false
     }
+  },
+  "packing_templates": {
+    "RH": "rh_packing",
+    "DEFAULT": "rh_packing",
+    "RESTIRATION HARDWARE": "rh_packing",
+    "RESTORATION HARDWARE": "rh_packing"
   }
 }
-

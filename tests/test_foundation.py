@@ -62,3 +62,20 @@ def test_config_rejects_wildcard_origins(monkeypatch) -> None:
     monkeypatch.setenv("QC_ALLOWED_ORIGINS", "*")
     with pytest.raises(ValueError, match="explicit origins"):
         load_settings()
+
+
+def test_trusted_host_blocks_unapproved_hosts(tmp_path: Path) -> None:
+    with TestClient(create_app(Settings(data_dir=tmp_path))) as client:
+        allowed_ip = client.get("/api/health", headers={"Host": "127.0.0.1"})
+        assert allowed_ip.status_code == 200
+        allowed_local = client.get("/api/health", headers={"Host": "localhost"})
+        assert allowed_local.status_code == 200
+        blocked = client.get("/api/health", headers={"Host": "evil.com"})
+        assert blocked.status_code == 400
+
+
+def test_config_rejects_wildcard_hosts(monkeypatch) -> None:
+    import pytest
+    monkeypatch.setenv("QC_ALLOWED_HOSTS", "*")
+    with pytest.raises(ValueError, match="explicit hosts"):
+        load_settings()
